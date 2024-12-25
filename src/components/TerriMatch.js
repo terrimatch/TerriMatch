@@ -77,17 +77,17 @@ function TerriMatch() {
         </div>
       </section>
 
-      {/* Secțiunea de contact nouă */}
-      <section className="container mx-auto px-4 py-16">
-        <h2 className="text-3xl font-bold text-center mb-12">Contact</h2>
-        <div className="text-center">
-          <Mail className="w-12 h-12 mx-auto mb-4 text-blue-400" />
-          <p className="text-xl mb-4">Ai întrebări? Contactează-ne la:</p>
-          <<a href="mailto:terrimatch.contact@gmail.com" className="text-blue-400 hover:text-blue-300">
-  terrimatch.contact@gmail.com
-          </a>
-        </div>
-      </section>
+      {/* Secțiunea de contact */}
+<section className="container mx-auto px-4 py-16">
+  <h2 className="text-3xl font-bold text-center mb-12">Contact</h2>
+  <div className="text-center">
+    <Mail className="w-12 h-12 mx-auto mb-4 text-blue-400" />
+    <p className="text-xl mb-4">Ai întrebări? Contactează-ne la:</p>
+    <a href="mailto:terrimatch.contact@gmail.com" className="text-blue-400 hover:text-blue-300">
+      terrimatch.contact@gmail.com
+    </a>
+  </div>
+</section>
 
       <footer className="container mx-auto px-4 py-8 text-center text-gray-400">
         <p>© 2024 TerriMatch. Toate drepturile rezervate.</p>
