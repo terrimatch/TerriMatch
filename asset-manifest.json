@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/TerriMatch/static/css/main.89ef8a90.css",
+    "main.js": "/TerriMatch/static/js/main.6616c66c.js",
+    "static/js/453.1f393b41.chunk.js": "/TerriMatch/static/js/453.1f393b41.chunk.js",
+    "index.html": "/TerriMatch/index.html",
+    "main.89ef8a90.css.map": "/TerriMatch/static/css/main.89ef8a90.css.map",
+    "main.6616c66c.js.map": "/TerriMatch/static/js/main.6616c66c.js.map",
+    "453.1f393b41.chunk.js.map": "/TerriMatch/static/js/453.1f393b41.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.89ef8a90.css",
+    "static/js/main.6616c66c.js"
+  ]
+}
