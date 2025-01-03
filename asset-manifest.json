@@ -1,15 +1,14 @@
 {
   "files": {
-    "main.css": "/TerriMatch/static/css/main.89ef8a90.css",
-    "main.js": "/TerriMatch/static/js/main.6616c66c.js",
-    "static/js/453.1f393b41.chunk.js": "/TerriMatch/static/js/453.1f393b41.chunk.js",
+    "main.css": "/TerriMatch/static/css/main.6f421872.css",
+    "main.js": "/TerriMatch/static/js/main.000fac40.js",
+    "static/media/background.jpg": "/TerriMatch/static/media/background.173772357e09b5136526.jpg",
     "index.html": "/TerriMatch/index.html",
-    "main.89ef8a90.css.map": "/TerriMatch/static/css/main.89ef8a90.css.map",
-    "main.6616c66c.js.map": "/TerriMatch/static/js/main.6616c66c.js.map",
-    "453.1f393b41.chunk.js.map": "/TerriMatch/static/js/453.1f393b41.chunk.js.map"
+    "main.6f421872.css.map": "/TerriMatch/static/css/main.6f421872.css.map",
+    "main.000fac40.js.map": "/TerriMatch/static/js/main.000fac40.js.map"
   },
   "entrypoints": [
-    "static/css/main.89ef8a90.css",
-    "static/js/main.6616c66c.js"
+    "static/css/main.6f421872.css",
+    "static/js/main.000fac40.js"
   ]
 }
