@@ -2,6 +2,7 @@
 module.exports = {
   content: [
     "./src/**/*.{js,jsx,ts,tsx}",
+<<<<<<< HEAD
     "./public/index.html"
   ],
   theme: {
@@ -18,6 +19,11 @@ module.exports = {
         }
       }
     },
+=======
+  ],
+  theme: {
+    extend: {},
+>>>>>>> 615bbeb4feb368cbb6b7b6758185bb49e282f5b2
   },
   plugins: [],
 }
