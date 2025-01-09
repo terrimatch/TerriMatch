@@ -1,260 +1,121 @@
-import express from 'express';
-import { supabase } from '../../config/supabaseClient.js';
-import { applyBoostToMatching } from '../../services/boostService.js';
+//... în funcția router.get('/potential'), actualizăm calculul scorului:
 
-const router = express.Router();
+const calculateMatchScore = (currentUser, profile, preferences) => {
+    let totalScore = 0;
+    let totalWeight = 0;
 
-// Calculate distance between two points
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    // Funcție helper pentru calculul scorului
+    const addScore = (score, weight) => {
+        totalScore += score * weight;
+        totalWeight += weight;
+    };
+
+    // 1. Interese comune (weight: 3)
+    if (preferences.interests?.length > 0 && profile.interests?.length > 0) {
+        const commonInterests = profile.interests.filter(
+            interest => preferences.interests.includes(interest)
+        );
+        const interestScore = commonInterests.length / preferences.interests.length;
+        addScore(interestScore, 3);
+    }
+
+    // 2. Locație/Distanță (weight: 2.5)
+    if (currentUser.latitude && currentUser.longitude && profile.latitude && profile.longitude) {
+        const distance = calculateDistance(
+            currentUser.latitude,
+            currentUser.longitude,
+            profile.latitude,
+            profile.longitude
+        );
+        const maxDistance = preferences.distance || 50;
+        const distanceScore = 1 - (distance / maxDistance);
+        addScore(distanceScore, 2.5);
+    }
+
+    // 3. Obiective relaționale (weight: 4)
+    if (preferences.relationshipGoals?.length > 0 && profile.relationship_goals) {
+        const goalScore = preferences.relationshipGoals.includes(profile.relationship_goals) ? 1 : 0;
+        addScore(goalScore, 4);
+    }
+
+    // 4. Limbi comune (weight: 2)
+    if (preferences.languages?.length > 0 && profile.languages?.length > 0) {
+        const commonLanguages = profile.languages.filter(
+            lang => preferences.languages.includes(lang)
+        );
+        const languageScore = commonLanguages.length / preferences.languages.length;
+        addScore(languageScore, 2);
+    }
+
+    // 5. Înălțime (weight: 1)
+    if (preferences.heightRange && profile.height) {
+        const heightInRange = profile.height >= preferences.heightRange.min && 
+                            profile.height <= preferences.heightRange.max;
+        addScore(heightInRange ? 1 : 0, 1);
+    }
+
+    // 6. Educație (weight: 2)
+    if (preferences.educationLevel?.length > 0 && profile.education_level) {
+        const educationScore = preferences.educationLevel.includes(profile.education_level) ? 1 : 0;
+        addScore(educationScore, 2);
+    }
+
+    // 7. Stil de viață (weight: 2.5)
+    if (preferences.lifestyle && profile.lifestyle) {
+        let lifestyleMatches = 0;
+        let lifestyleFactors = 0;
+        
+        const factors = ['smoking', 'drinking', 'exercise', 'diet'];
+        factors.forEach(factor => {
+            if (preferences.lifestyle[factor] && profile.lifestyle[factor]) {
+                lifestyleFactors++;
+                if (preferences.lifestyle[factor] === profile.lifestyle[factor]) {
+                    lifestyleMatches++;
+                }
+            }
+        });
+        
+        if (lifestyleFactors > 0) {
+            const lifestyleScore = lifestyleMatches / lifestyleFactors;
+            addScore(lifestyleScore, 2.5);
+        }
+    }
+
+    // 8. Premium status bonus (weight: 0.5)
+    if (profile.is_premium) {
+        addScore(1, 0.5);
+    }
+
+    // Calculează scorul final (0-100)
+    return totalWeight > 0 ? Math.round((totalScore / totalWeight) * 100) : 50;
 };
 
-// Get potential matches
-router.get('/potential', async (req, res) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No authorization header' });
-        }
+// Actualizăm query-ul pentru a include noile câmpuri
+let query = supabase
+    .from('profiles')
+    .select(`
+        id,
+        username,
+        avatar_url,
+        bio,
+        gender,
+        birth_date,
+        interests,
+        latitude,
+        longitude,
+        is_premium,
+        boost_active_until,
+        relationship_goals,
+        languages,
+        height,
+        education_level,
+        occupation,
+        lifestyle
+    `)
+    .not('id', 'in', excludeIds);
 
-        const token = authHeader.split(' ')[1];
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-        if (authError) throw authError;
-
-        // Get current user's profile and preferences
-        const { data: currentUser, error: userError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single();
-
-        if (userError) throw userError;
-
-        const preferences = currentUser.preferences || {};
-        
-        // Get already liked or disliked profiles
-        const { data: interactions } = await supabase
-            .from('likes')
-            .select('to_user')
-            .eq('from_user', user.id);
-
-        const excludeIds = interactions?.map(i => i.to_user) || [];
-        excludeIds.push(user.id); // exclude self
-
-        // Build query based on preferences
-        let query = supabase
-            .from('profiles')
-            .select(`
-                id,
-                username,
-                avatar_url,
-                bio,
-                gender,
-                birth_date,
-                interests,
-                latitude,
-                longitude,
-                is_premium,
-                boost_active_until
-            `)
-            .not('id', 'in', excludeIds);
-
-        // Apply filters based on preferences
-        if (preferences.gender) {
-            query = query.eq('gender', preferences.gender);
-        }
-
-        if (preferences.ageRange) {
-            const minDate = new Date();
-            minDate.setFullYear(minDate.getFullYear() - preferences.ageRange.max);
-            const maxDate = new Date();
-            maxDate.setFullYear(maxDate.getFullYear() - preferences.ageRange.min);
-            
-            query = query
-                .gte('birth_date', minDate.toISOString())
-                .lte('birth_date', maxDate.toISOString());
-        }
-
-        // Get potential matches
-        const { data: potentialMatches, error: matchError } = await query
-            .limit(50); // Get more initially to allow for filtering
-
-        if (matchError) throw matchError;
-
-        // Filter by distance and interests
-        const filteredMatches = potentialMatches.filter(profile => {
-            // Check distance if location is available
-            if (currentUser.latitude && currentUser.longitude && profile.latitude && profile.longitude) {
-                const distance = calculateDistance(
-                    currentUser.latitude,
-                    currentUser.longitude,
-                    profile.latitude,
-                    profile.longitude
-                );
-                if (distance > (preferences.distance || 50)) {
-                    return false;
-                }
-            }
-
-            // Check interests if specified
-            if (preferences.interests && preferences.interests.length > 0 && profile.interests) {
-                const commonInterests = profile.interests.filter(
-                    interest => preferences.interests.includes(interest)
-                );
-                if (commonInterests.length === 0) {
-                    return false;
-                }
-            }
-
-            return true;
-        });
-
-        // Calculate match percentage for each profile
-        const matchesWithScore = filteredMatches.map(profile => {
-            let score = 0;
-            let factors = 0;
-
-            // Interest matching
-            if (preferences.interests && preferences.interests.length > 0 && profile.interests) {
-                const commonInterests = profile.interests.filter(
-                    interest => preferences.interests.includes(interest)
-                );
-                score += (commonInterests.length / preferences.interests.length);
-                factors++;
-            }
-
-            // Distance scoring
-            if (currentUser.latitude && currentUser.longitude && profile.latitude && profile.longitude) {
-                const distance = calculateDistance(
-                    currentUser.latitude,
-                    currentUser.longitude,
-                    profile.latitude,
-                    profile.longitude
-                );
-                const maxDistance = preferences.distance || 50;
-                score += 1 - (distance / maxDistance);
-                factors++;
-            }
-
-            // Premium users get a small boost
-            if (profile.is_premium) {
-                score += 0.1;
-                factors += 0.5;
-            }
-
-            const matchPercentage = factors > 0 
-                ? Math.round((score / factors) * 100) 
-                : 50;
-
-            return {
-                ...profile,
-                matchPercentage
-            };
-        });
-
-        // Get active boosts
-        const { data: boostedProfiles } = await supabase
-            .from('profiles')
-            .select('id, boost_active_until')
-            .gt('boost_active_until', new Date().toISOString());
-
-        // Apply boosts and sort
-        const finalMatches = applyBoostToMatching(matchesWithScore, boostedProfiles || [])
-            .sort((a, b) => b.matchPercentage - a.matchPercentage)
-            .slice(0, 20); // Return only top 20 matches
-
-        res.json(finalMatches);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-// Update preferences
-router.put('/preferences', async (req, res) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No authorization header' });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-        if (authError) throw authError;
-
-        const preferences = req.body;
-
-        // Validate preferences
-        if (preferences.ageRange) {
-            if (preferences.ageRange.min < 18) {
-                return res.status(400).json({ error: 'Minimum age must be 18 or above' });
-            }
-            if (preferences.ageRange.max < preferences.ageRange.min) {
-                return res.status(400).json({ error: 'Maximum age must be greater than minimum age' });
-            }
-        }
-
-        // Update preferences
-        const { data, error } = await supabase
-            .from('profiles')
-            .update({ preferences })
-            .eq('id', user.id)
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        res.json(data);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-// Update location
-router.put('/location', async (req, res) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No authorization header' });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-        if (authError) throw authError;
-
-        const { latitude, longitude } = req.body;
-
-        if (!latitude || !longitude) {
-            return res.status(400).json({ error: 'Latitude and longitude are required' });
-        }
-
-        const { data, error } = await supabase
-            .from('profiles')
-            .update({ 
-                latitude,
-                longitude,
-                location_updated_at: new Date()
-            })
-            .eq('id', user.id)
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        res.json(data);
-    } catch (error) {
-        res.status(400).json({ error: error.message });
-    }
-});
-
-export default router;
+// În secțiunea de calculare a match-urilor:
+const matchesWithScore = filteredMatches.map(profile => ({
+    ...profile,
+    matchPercentage: calculateMatchScore(currentUser, profile, preferences)
+}));
