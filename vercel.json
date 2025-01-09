@@ -16,5 +16,12 @@
       "dest": "./backend/src/api/index.js"
     }
   ],
+<<<<<<< HEAD
   "outputDirectory": "public"
 }
+=======
+  "env": {
+    "NODE_ENV": "production"
+  }
+}
+>>>>>>> 4c1f399b0872ed0d73b16b0f495ea90122c074a5
