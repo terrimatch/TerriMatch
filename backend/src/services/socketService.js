@@ -1,77 +1,67 @@
 import { Server } from 'socket.io';
-import jwt from 'jsonwebtoken';
+import { supabase } from '../config/supabaseClient.js';
 
 let io;
 
 export const initializeSocket = (server) => {
     io = new Server(server, {
         cors: {
-            origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+            origin: process.env.FRONTEND_URL || '*',
             methods: ['GET', 'POST']
         }
     });
 
-    io.use(async (socket, next) => {
-        try {
-            const token = socket.handshake.auth.token;
-            if (!token) {
-                return next(new Error('Authentication error'));
-            }
-
-            const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            socket.userId = decoded.userId;
-            next();
-        } catch (error) {
-            next(new Error('Authentication error'));
-        }
-    });
-
     io.on('connection', (socket) => {
-        console.log('User connected:', socket.userId);
+        console.log('User connected:', socket.id);
 
         // Join personal room for notifications
-        socket.join(`user:${socket.userId}`);
-
-        // Join chat rooms
-        socket.on('join_chat', (chatId) => {
-            socket.join(`chat:${chatId}`);
-            console.log(`User ${socket.userId} joined chat ${chatId}`);
+        socket.on('join_user_room', (userId) => {
+            socket.join(`user_${userId}`);
+            console.log(`User ${userId} joined their personal room`);
         });
 
-        // Leave chat rooms
-        socket.on('leave_chat', (chatId) => {
-            socket.leave(`chat:${chatId}`);
-            console.log(`User ${socket.userId} left chat ${chatId}`);
+        // Join chat room
+        socket.on('join_chat', (conversationId) => {
+            socket.join(`chat_${conversationId}`);
+            console.log(`User joined chat ${conversationId}`);
+        });
+
+        // Leave chat room
+        socket.on('leave_chat', (conversationId) => {
+            socket.leave(`chat_${conversationId}`);
+            console.log(`User left chat ${conversationId}`);
+        });
+
+        // Typing status
+        socket.on('typing', ({ conversationId, userId, isTyping }) => {
+            socket.to(`chat_${conversationId}`).emit('user_typing', { userId, isTyping });
         });
 
         socket.on('disconnect', () => {
-            console.log('User disconnected:', socket.userId);
+            console.log('User disconnected:', socket.id);
         });
     });
 
     return io;
 };
 
+// Function to emit new message notification
+export const emitNewMessage = (conversationId, message) => {
+    if (io) {
+        io.to(`chat_${conversationId}`).emit('new_message', message);
+    }
+};
+
+// Function to emit match notification
+export const emitNewMatch = (userId, matchData) => {
+    if (io) {
+        io.to(`user_${userId}`).emit('new_match', matchData);
+    }
+};
+
+// Function to emit general notification
 export const emitNotification = (userId, notification) => {
     if (io) {
-        io.to(`user:${userId}`).emit('notification', notification);
-    }
-};
-
-export const emitChatMessage = (chatId, message) => {
-    if (io) {
-        io.to(`chat:${chatId}`).emit('chat_message', message);
-    }
-};
-
-export const emitMatchUpdate = (userId, matchData) => {
-    if (io) {
-        io.to(`user:${userId}`).emit('match_update', matchData);
-    }
-};
-
-export const emitTypingStatus = (chatId, userId, isTyping) => {
-    if (io) {
-        io.to(`chat:${chatId}`).emit('typing_status', { userId, isTyping });
+        io.to(`user_${userId}`).emit('notification', notification);
     }
 };
