@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import { supabase } from '../config/supabaseClient.js';
 
+// Push Notification Functions
 export const sendPushNotification = async (userId, notification) => {
     try {
         // Get user's notification settings
@@ -52,9 +53,48 @@ export const sendPushNotification = async (userId, notification) => {
     }
 };
 
-export const notifyNewMessage = async (userId, message, sender) => {
+// In-App Notification Functions
+export const createInAppNotification = async (data) => {
     try {
-        await sendPushNotification(userId, {
+        const { error } = await supabase
+            .from('in_app_notifications')
+            .insert([{
+                recipient_id: data.recipientId,
+                sender_id: data.senderId,
+                type: data.type,
+                title: data.title,
+                content: data.content,
+                data: data.additionalData || {},
+                read: false
+            }]);
+
+        if (error) throw error;
+
+        return true;
+    } catch (error) {
+        console.error('Error creating in-app notification:', error);
+        return false;
+    }
+};
+
+// Combined Notification Functions
+export const notifyNewMessage = async (recipientId, message, sender) => {
+    try {
+        // Create in-app notification
+        await createInAppNotification({
+            recipientId: recipientId,
+            senderId: sender.id,
+            type: 'message',
+            title: 'New Message',
+            content: message.message_type === 'text' ? message.content : '📷 Image',
+            additionalData: {
+                conversationId: message.conversation_id,
+                messageId: message.id
+            }
+        });
+
+        // Send push notification
+        await sendPushNotification(recipientId, {
             type: 'messages',
             title: `New message from ${sender.username}`,
             body: message.message_type === 'text' ? message.content : '📷 Image',
@@ -66,12 +106,25 @@ export const notifyNewMessage = async (userId, message, sender) => {
             }
         });
     } catch (error) {
-        console.error('Error sending message notification:', error);
+        console.error('Error sending message notifications:', error);
     }
 };
 
-export const notifyNewMatch = async (userId, matchedUser) => {
+export const notifyNewMatch = async (userId, matchedUser, matchData) => {
     try {
+        // Create in-app notification
+        await createInAppNotification({
+            recipientId: userId,
+            senderId: matchedUser.id,
+            type: 'match',
+            title: 'New Match!',
+            content: `You matched with ${matchedUser.username}!`,
+            additionalData: {
+                matchId: matchData.id
+            }
+        });
+
+        // Send push notification
         await sendPushNotification(userId, {
             type: 'matches',
             title: 'New Match! 🎉',
@@ -79,26 +132,83 @@ export const notifyNewMatch = async (userId, matchedUser) => {
             icon: matchedUser.avatar_url,
             data: {
                 type: 'match',
-                matchId: matchedUser.id
+                matchId: matchData.id
             }
         });
     } catch (error) {
-        console.error('Error sending match notification:', error);
+        console.error('Error sending match notifications:', error);
     }
 };
 
-export const notifySystemMessage = async (userId, title, message) => {
+export const notifyNewLike = async (userId, likedByUser) => {
     try {
+        await createInAppNotification({
+            recipientId: userId,
+            senderId: likedByUser.id,
+            type: 'like',
+            title: 'New Like',
+            content: `${likedByUser.username} liked your profile!`,
+            additionalData: {
+                userId: likedByUser.id
+            }
+        });
+    } catch (error) {
+        console.error('Error sending like notification:', error);
+    }
+};
+
+export const notifySystemMessage = async (userId, title, message, data = {}) => {
+    try {
+        // Create in-app notification
+        await createInAppNotification({
+            recipientId: userId,
+            senderId: null,
+            type: 'system',
+            title,
+            content: message,
+            additionalData: data
+        });
+
+        // Send push notification
         await sendPushNotification(userId, {
             type: 'system',
             title,
             body: message,
             icon: '/app-icon.png',
             data: {
-                type: 'system'
+                type: 'system',
+                ...data
             }
         });
     } catch (error) {
-        console.error('Error sending system notification:', error);
+        console.error('Error sending system notifications:', error);
+    }
+};
+
+// Utility Functions
+export const removeExpiredSubscriptions = async (userId) => {
+    try {
+        const { data: subscriptions } = await supabase
+            .from('push_subscriptions')
+            .select('*')
+            .eq('user_id', userId);
+
+        for (const sub of subscriptions) {
+            try {
+                await webpush.sendNotification(
+                    sub.subscription,
+                    JSON.stringify({ type: 'ping' })
+                );
+            } catch (error) {
+                if (error.statusCode === 410) {
+                    await supabase
+                        .from('push_subscriptions')
+                        .delete()
+                        .eq('id', sub.id);
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error cleaning up subscriptions:', error);
     }
 };
