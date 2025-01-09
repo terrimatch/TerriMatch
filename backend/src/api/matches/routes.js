@@ -16,25 +16,33 @@ router.get('/potential', async (req, res) => {
 
         if (authError) throw authError;
 
-        // Get user's preferences first
-        const { data: userProfile, error: profileError } = await supabase
+        // Get user preferences
+        const { data: currentUser, error: userError } = await supabase
             .from('profiles')
-            .select('*')
+            .select('preferences')
             .eq('id', user.id)
             .single();
 
-        if (profileError) throw profileError;
+        if (userError) throw userError;
 
-        // Get users that match preferences and haven't been liked/disliked
+        // Get users who haven't been liked or matched yet
         const { data: potentialMatches, error: matchError } = await supabase
             .from('profiles')
-            .select('id, username, bio, avatar_url, location, interests')
+            .select(`
+                id,
+                username,
+                bio,
+                avatar_url,
+                location,
+                interests,
+                created_at
+            `)
             .neq('id', user.id)
             .not('id', 'in', (
                 supabase
                     .from('likes')
-                    .select('to_user')
-                    .eq('from_user', user.id)
+                    .select('to_user_id')
+                    .eq('from_user_id', user.id)
             ))
             .limit(20);
 
@@ -61,24 +69,34 @@ router.post('/like/:profileId', async (req, res) => {
 
         const { profileId } = req.params;
 
-        // Add like
-        const { error: likeError } = await supabase
+        // Check if already liked
+        const { data: existingLike, error: likeError } = await supabase
             .from('likes')
-            .insert([
-                { 
-                    from_user: user.id,
-                    to_user: profileId
-                }
-            ]);
+            .select('*')
+            .eq('from_user_id', user.id)
+            .eq('to_user_id', profileId)
+            .single();
 
-        if (likeError) throw likeError;
+        if (existingLike) {
+            return res.status(400).json({ error: 'Profile already liked' });
+        }
+
+        // Add like
+        const { error: newLikeError } = await supabase
+            .from('likes')
+            .insert([{
+                from_user_id: user.id,
+                to_user_id: profileId
+            }]);
+
+        if (newLikeError) throw newLikeError;
 
         // Check if it's a match
         const { data: matchData, error: matchCheckError } = await supabase
             .from('likes')
             .select('*')
-            .eq('from_user', profileId)
-            .eq('to_user', user.id)
+            .eq('from_user_id', profileId)
+            .eq('to_user_id', user.id)
             .single();
 
         if (matchCheckError && matchCheckError.code !== 'PGRST116') {
@@ -86,36 +104,29 @@ router.post('/like/:profileId', async (req, res) => {
         }
 
         if (matchData) {
-            // It's a match! Create a match record
+            // It's a match! Create match record
             const { data: match, error: createMatchError } = await supabase
                 .from('matches')
-                .insert([
-                    {
-                        user1_id: user.id,
-                        user2_id: profileId,
-                        status: 'active'
-                    }
-                ])
+                .insert([{
+                    user1_id: user.id,
+                    user2_id: profileId,
+                    status: 'active'
+                }])
                 .select()
                 .single();
 
             if (createMatchError) throw createMatchError;
 
-            // Create a conversation for the match
-            const { error: convError } = await supabase
+            // Create chat conversation
+            const { error: chatError } = await supabase
                 .from('conversations')
-                .insert([
-                    {
-                        match_id: match.id
-                    }
-                ]);
+                .insert([{
+                    match_id: match.id
+                }]);
 
-            if (convError) throw convError;
+            if (chatError) throw chatError;
 
-            return res.json({ 
-                match: true, 
-                matchData: match 
-            });
+            return res.json({ match: true, matchData: match });
         }
 
         res.json({ match: false });
@@ -141,12 +152,8 @@ router.get('/my-matches', async (req, res) => {
             .from('matches')
             .select(`
                 *,
-                user1:profiles!matches_user1_id_fkey(
-                    id, username, avatar_url
-                ),
-                user2:profiles!matches_user2_id_fkey(
-                    id, username, avatar_url
-                ),
+                user1:user1_id(id, username, avatar_url),
+                user2:user2_id(id, username, avatar_url),
                 conversations(id, last_message, last_message_at)
             `)
             .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
@@ -176,15 +183,27 @@ router.post('/unmatch/:matchId', async (req, res) => {
 
         const { matchId } = req.params;
 
+        // Verify user is part of the match
+        const { data: match, error: matchError } = await supabase
+            .from('matches')
+            .select('*')
+            .eq('id', matchId)
+            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+            .single();
+
+        if (matchError || !match) {
+            return res.status(404).json({ error: 'Match not found' });
+        }
+
+        // Update match status
         const { error: updateError } = await supabase
             .from('matches')
             .update({ status: 'ended' })
-            .eq('id', matchId)
-            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+            .eq('id', matchId);
 
         if (updateError) throw updateError;
 
-        res.json({ message: 'Unmatched successfully' });
+        res.json({ message: 'Successfully unmatched' });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
