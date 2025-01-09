@@ -3,7 +3,7 @@ import { supabase } from '../../config/supabaseClient.js';
 
 const router = express.Router();
 
-// Get all conversations for a user
+// Get all conversations for the current user
 router.get('/conversations', async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
@@ -16,23 +16,31 @@ router.get('/conversations', async (req, res) => {
 
         if (authError) throw authError;
 
+        // Get all conversations from matches
         const { data: conversations, error } = await supabase
             .from('conversations')
             .select(`
-                *,
+                id,
+                last_message,
+                last_message_at,
+                created_at,
                 match:matches (
                     id,
                     user1:profiles!matches_user1_id_fkey (id, username, avatar_url),
                     user2:profiles!matches_user2_id_fkey (id, username, avatar_url)
                 )
             `)
-            .eq('match.status', 'active')
-            .or(`match.user1_id.eq.${user.id},match.user2_id.eq.${user.id}`)
             .order('last_message_at', { ascending: false });
 
         if (error) throw error;
 
-        res.json(conversations);
+        // Filter conversations to only include those where the user is part of the match
+        const userConversations = conversations.filter(conv => {
+            const match = conv.match;
+            return match.user1.id === user.id || match.user2.id === user.id;
+        });
+
+        res.json(userConversations);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
@@ -53,28 +61,41 @@ router.get('/messages/:conversationId', async (req, res) => {
 
         const { conversationId } = req.params;
 
-        // Verify user has access to this conversation
+        // First verify user has access to this conversation
         const { data: conversation, error: convError } = await supabase
             .from('conversations')
-            .select('match:matches(user1_id, user2_id)')
+            .select(`
+                id,
+                match:matches (
+                    user1_id,
+                    user2_id
+                )
+            `)
             .eq('id', conversationId)
             .single();
 
-        if (convError) throw convError;
-
-        if (!conversation.match) {
+        if (convError || !conversation) {
             return res.status(404).json({ error: 'Conversation not found' });
         }
 
+        // Verify user is part of the match
         if (conversation.match.user1_id !== user.id && conversation.match.user2_id !== user.id) {
             return res.status(403).json({ error: 'Access denied' });
         }
 
+        // Get messages
         const { data: messages, error: msgError } = await supabase
             .from('messages')
             .select(`
-                *,
-                sender:profiles!messages_sender_id_fkey (id, username, avatar_url)
+                id,
+                content,
+                message_type,
+                created_at,
+                sender:profiles!messages_sender_id_fkey (
+                    id,
+                    username,
+                    avatar_url
+                )
             `)
             .eq('conversation_id', conversationId)
             .order('created_at', { ascending: true });
@@ -88,7 +109,7 @@ router.get('/messages/:conversationId', async (req, res) => {
 });
 
 // Send a message
-router.post('/messages', async (req, res) => {
+router.post('/send', async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader) {
@@ -100,18 +121,26 @@ router.post('/messages', async (req, res) => {
 
         if (authError) throw authError;
 
-        const { conversationId, content, type = 'text' } = req.body;
+        const { conversationId, content, messageType = 'text' } = req.body;
 
-        // Verify user has access to this conversation
+        if (!content?.trim()) {
+            return res.status(400).json({ error: 'Message content is required' });
+        }
+
+        // Verify access to conversation
         const { data: conversation, error: convError } = await supabase
             .from('conversations')
-            .select('match:matches(user1_id, user2_id)')
+            .select(`
+                id,
+                match:matches (
+                    user1_id,
+                    user2_id
+                )
+            `)
             .eq('id', conversationId)
             .single();
 
-        if (convError) throw convError;
-
-        if (!conversation.match) {
+        if (convError || !conversation) {
             return res.status(404).json({ error: 'Conversation not found' });
         }
 
@@ -119,25 +148,31 @@ router.post('/messages', async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
+        // Send message
         const { data: message, error: msgError } = await supabase
             .from('messages')
-            .insert([
-                {
-                    conversation_id: conversationId,
-                    sender_id: user.id,
-                    content,
-                    message_type: type
-                }
-            ])
+            .insert([{
+                conversation_id: conversationId,
+                sender_id: user.id,
+                content,
+                message_type: messageType
+            }])
             .select(`
-                *,
-                sender:profiles!messages_sender_id_fkey (id, username, avatar_url)
+                id,
+                content,
+                message_type,
+                created_at,
+                sender:profiles!messages_sender_id_fkey (
+                    id,
+                    username,
+                    avatar_url
+                )
             `)
             .single();
 
         if (msgError) throw msgError;
 
-        // Update conversation's last message
+        // Update conversation last message
         const { error: updateError } = await supabase
             .from('conversations')
             .update({
