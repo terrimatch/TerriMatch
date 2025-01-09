@@ -1,88 +1,127 @@
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
-import { supabase } from '../../config/supabase.js';
-import { auth } from '../../middleware/auth.js';
+import { supabase } from '../../config/supabaseClient.js';
 
 const router = express.Router();
 
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
+// Инициализация бота
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
+
+// Обработка команды /start
+bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    const code = Math.random().toString(36).substring(7);
+    
+    try {
+        await supabase
+            .from('telegram_verify')
+            .insert([{
+                telegram_chat_id: chatId.toString(),
+                verification_code: code,
+                created_at: new Date()
+            }]);
+
+        bot.sendMessage(chatId, 
+            `Bine ai venit la TerriMatch!\n\n` +
+            `Codul tău de verificare este: ${code}\n\n` +
+            `Te rog introdu acest cod în aplicație pentru a conecta contul tău de Telegram.`
+        );
+    } catch (error) {
+        console.error('Error saving verification code:', error);
+        bot.sendMessage(chatId, 'A apărut o eroare. Te rog încearcă din nou.');
+    }
+});
 
 // Link Telegram account
-router.post('/link', auth, async (req, res) => {
-  try {
-    const { telegramId } = req.body;
-    
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ telegram_id: telegramId })
-      .eq('user_id', req.userId)
-      .select()
-      .single();
+router.post('/link', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
+        }
 
-    if (error) throw error;
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
-    // Send welcome message to Telegram user
-    await bot.sendMessage(telegramId, 
-      'Your Telegram account has been successfully linked to TerriMatch! ' +
-      'You will now receive notifications here.');
+        if (authError) throw authError;
 
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+        const { verificationCode } = req.body;
+
+        // Verifică codul
+        const { data: verifyData, error: verifyError } = await supabase
+            .from('telegram_verify')
+            .select('telegram_chat_id')
+            .eq('verification_code', verificationCode)
+            .single();
+
+        if (verifyError || !verifyData) {
+            return res.status(400).json({ error: 'Cod de verificare invalid' });
+        }
+
+        // Actualizează profilul cu ID-ul de Telegram
+        const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ telegram_id: verifyData.telegram_chat_id })
+            .eq('id', user.id);
+
+        if (updateError) throw updateError;
+
+        // Șterge codul de verificare folosit
+        await supabase
+            .from('telegram_verify')
+            .delete()
+            .eq('verification_code', verificationCode);
+
+        // Trimite mesaj de confirmare pe Telegram
+        bot.sendMessage(verifyData.telegram_chat_id, 
+            'Contul tău a fost conectat cu succes la TerriMatch! Vei primi notificări aici.');
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
 });
 
 // Unlink Telegram account
-router.post('/unlink', auth, async (req, res) => {
-  try {
-    const { data: currentProfile } = await supabase
-      .from('profiles')
-      .select('telegram_id')
-      .eq('user_id', req.userId)
-      .single();
+router.post('/unlink', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
+        }
 
-    if (currentProfile?.telegram_id) {
-      await bot.sendMessage(currentProfile.telegram_id, 
-        'Your Telegram account has been unlinked from TerriMatch.');
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError) throw authError;
+
+        // Get current telegram_id
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('telegram_id')
+            .eq('id', user.id)
+            .single();
+
+        if (profileError) throw profileError;
+
+        if (profile.telegram_id) {
+            // Trimite mesaj de deconectare
+            bot.sendMessage(profile.telegram_id, 
+                'Contul tău a fost deconectat de la TerriMatch. Nu vei mai primi notificări aici.');
+        }
+
+        // Remove telegram_id from profile
+        const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ telegram_id: null })
+            .eq('id', user.id);
+
+        if (updateError) throw updateError;
+
+        res.json({ success: true });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({ telegram_id: null })
-      .eq('user_id', req.userId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    res.json(data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Send test notification
-router.post('/test-notification', auth, async (req, res) => {
-  try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('telegram_id')
-      .eq('user_id', req.userId)
-      .single();
-
-    if (!profile?.telegram_id) {
-      return res.status(400).json({ 
-        error: 'No Telegram account linked' 
-      });
-    }
-
-    await bot.sendMessage(profile.telegram_id, 
-      'This is a test notification from TerriMatch! 👋');
-
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 export default router;

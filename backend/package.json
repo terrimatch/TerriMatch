@@ -2,21 +2,37 @@
   "name": "terrimatch-backend",
   "version": "1.0.0",
   "type": "module",
+  "description": "TerriMatch backend API",
+  "main": "src/api/index.js",
   "scripts": {
-    "dev": "node src/api/index.js",
-    "start": "node src/api/index.js"
+    "start": "node src/api/index.js",
+    "dev": "nodemon src/api/index.js",
+    "test:connection": "node src/test/testConnection.js",
+    "build": "echo 'No build step required'"
   },
   "dependencies": {
-<<<<<<< HEAD
-    "@supabase/supabase-js": "^2.47.12",
-=======
-    "@supabase/supabase-js": "^2.21.0",
-    "express": "^4.18.2",
->>>>>>> 75828202b3caa5fbfd36172ce836f2e61883fc5d
+    "@supabase/supabase-js": "^2.39.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "jsonwebtoken": "^9.0.0",
-    "node-telegram-bot-api": "^0.61.0",
-    "socket.io": "^4.6.1"
-  }
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-fileupload": "^1.5.1",
+    "jsonwebtoken": "^9.0.2",
+    "node-telegram-bot-api": "^0.64.0",
+    "socket.io": "^4.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "dating",
+    "matching",
+    "api",
+    "telegram",
+    "supabase"
+  ],
+  "author": "",
+  "license": "ISC"
 }
