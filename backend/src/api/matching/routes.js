@@ -1,5 +1,6 @@
 import express from 'express';
 import { supabase } from '../../config/supabaseClient.js';
+import { applyBoostToMatching } from '../../services/boostService.js';
 
 const router = express.Router();
 
@@ -38,7 +39,7 @@ router.get('/potential', async (req, res) => {
 
         if (userError) throw userError;
 
-        const preferences = currentUser.preferences;
+        const preferences = currentUser.preferences || {};
         
         // Get already liked or disliked profiles
         const { data: interactions } = await supabase
@@ -46,7 +47,7 @@ router.get('/potential', async (req, res) => {
             .select('to_user')
             .eq('from_user', user.id);
 
-        const excludeIds = interactions.map(i => i.to_user);
+        const excludeIds = interactions?.map(i => i.to_user) || [];
         excludeIds.push(user.id); // exclude self
 
         // Build query based on preferences
@@ -61,7 +62,9 @@ router.get('/potential', async (req, res) => {
                 birth_date,
                 interests,
                 latitude,
-                longitude
+                longitude,
+                is_premium,
+                boost_active_until
             `)
             .not('id', 'in', excludeIds);
 
@@ -83,7 +86,7 @@ router.get('/potential', async (req, res) => {
 
         // Get potential matches
         const { data: potentialMatches, error: matchError } = await query
-            .limit(20);
+            .limit(50); // Get more initially to allow for filtering
 
         if (matchError) throw matchError;
 
@@ -97,17 +100,17 @@ router.get('/potential', async (req, res) => {
                     profile.latitude,
                     profile.longitude
                 );
-                if (distance > preferences.distance) {
+                if (distance > (preferences.distance || 50)) {
                     return false;
                 }
             }
 
             // Check interests if specified
-            if (preferences.interests && preferences.interests.length > 0) {
-                const commonInterests = profile.interests?.filter(
+            if (preferences.interests && preferences.interests.length > 0 && profile.interests) {
+                const commonInterests = profile.interests.filter(
                     interest => preferences.interests.includes(interest)
                 );
-                if (!commonInterests || commonInterests.length === 0) {
+                if (commonInterests.length === 0) {
                     return false;
                 }
             }
@@ -121,11 +124,11 @@ router.get('/potential', async (req, res) => {
             let factors = 0;
 
             // Interest matching
-            if (preferences.interests && preferences.interests.length > 0) {
-                const commonInterests = profile.interests?.filter(
+            if (preferences.interests && preferences.interests.length > 0 && profile.interests) {
+                const commonInterests = profile.interests.filter(
                     interest => preferences.interests.includes(interest)
                 );
-                score += (commonInterests?.length || 0) / preferences.interests.length;
+                score += (commonInterests.length / preferences.interests.length);
                 factors++;
             }
 
@@ -137,8 +140,15 @@ router.get('/potential', async (req, res) => {
                     profile.latitude,
                     profile.longitude
                 );
-                score += 1 - (distance / preferences.distance);
+                const maxDistance = preferences.distance || 50;
+                score += 1 - (distance / maxDistance);
                 factors++;
+            }
+
+            // Premium users get a small boost
+            if (profile.is_premium) {
+                score += 0.1;
+                factors += 0.5;
             }
 
             const matchPercentage = factors > 0 
@@ -151,10 +161,18 @@ router.get('/potential', async (req, res) => {
             };
         });
 
-        // Sort by match percentage
-        matchesWithScore.sort((a, b) => b.matchPercentage - a.matchPercentage);
+        // Get active boosts
+        const { data: boostedProfiles } = await supabase
+            .from('profiles')
+            .select('id, boost_active_until')
+            .gt('boost_active_until', new Date().toISOString());
 
-        res.json(matchesWithScore);
+        // Apply boosts and sort
+        const finalMatches = applyBoostToMatching(matchesWithScore, boostedProfiles || [])
+            .sort((a, b) => b.matchPercentage - a.matchPercentage)
+            .slice(0, 20); // Return only top 20 matches
+
+        res.json(finalMatches);
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
