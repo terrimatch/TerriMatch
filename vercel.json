@@ -8,11 +8,7 @@
   ],
   "routes": [
     {
-      "src": "/api/telegram-webhook",
-      "dest": "backend/src/api/index.js"
-    },
-    {
-      "src": "/api/(.*)",
+      "src": "/(.*)",
       "dest": "backend/src/api/index.js"
     }
   ],
