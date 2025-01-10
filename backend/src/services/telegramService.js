@@ -3,6 +3,32 @@ import { supabase } from '../config/supabaseClient.js';
 
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 
+bot.onText(/\/start/, async (msg) => {
+    const chatId = msg.chat.id;
+    
+    try {
+        // Creăm butonul care va deschide Web App-ul
+        const keyboard = {
+            inline_keyboard: [[{
+                text: "Deschide TerriMatch",
+                web_app: {
+                    url: process.env.TELEGRAM_WEBAPP_URL // URL-ul aplicației tale
+                }
+            }]]
+        };
+
+        await bot.sendMessage(chatId, 
+            'Bine ai venit la TerriMatch! 👋\n\n' +
+            'Apasă butonul de mai jos pentru a deschide aplicația:',
+            {
+                reply_markup: keyboard
+            }
+        );
+    } catch (error) {
+        console.error('Telegram start error:', error);
+        await bot.sendMessage(chatId, 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.');
+    }
+});
 // Generate verification code
 const generateVerificationCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
