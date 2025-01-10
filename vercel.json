@@ -13,3 +13,11 @@
     }
   ]
 }
+{
+  "routes": [
+    {
+      "src": "/telegram",
+      "dest": "frontend/src/telegram/index.html"
+    }
+  ]
+}
