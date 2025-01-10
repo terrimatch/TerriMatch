@@ -8,16 +8,15 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
+      "src": "/api/telegram-webhook",
       "dest": "backend/src/api/index.js"
     },
     {
-      "src": "/telegram",
+      "src": "/api/(.*)",
       "dest": "backend/src/api/index.js"
     }
   ],
   "env": {
-    "TELEGRAM_BOT_TOKEN": "@telegram-bot-token",
-    "TELEGRAM_WEBAPP_URL": "@telegram-webapp-url"
+    "NODE_ENV": "production"
   }
 }
