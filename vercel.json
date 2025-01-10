@@ -1,7 +1,16 @@
 {
   "version": 2,
+  "functions": {
+    "backend/src/api/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "rewrites": [
-    { "source": "/(.*)", "destination": "/backend/src/api/index.js" }
+    {
+      "source": "/(.*)",
+      "destination": "/backend/src/api/index.js"
+    }
   ],
   "builds": [
     {
