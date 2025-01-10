@@ -7,7 +7,7 @@ dotenv.config();
 
 const app = express();
 
-// Configurare bot
+// Bot configuration
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     webHook: true
 });
@@ -16,23 +16,22 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
 app.use(cors());
 app.use(express.json());
 
-// Rută de bază pentru test
+// Base route
 app.get('/', (req, res) => {
-    res.json({ status: 'ok', message: 'TerriMatch API is running' });
+    res.json({ 
+        status: 'ok', 
+        message: 'TerriMatch API is running',
+        timestamp: new Date().toISOString()
+    });
 });
 
-// Telegram webhook
-app.post('/webhook', express.json(), (req, res) => {
+// Webhook route
+app.post('/webhook', (req, res) => {
     bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
-// Inițializare comenzi bot
-bot.setMyCommands([
-    { command: '/start', description: 'Deschide aplicația' }
-]);
-
-// Handler pentru comanda /start
+// Start command
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     try {
@@ -51,18 +50,21 @@ bot.onText(/\/start/, async (msg) => {
             }
         );
     } catch (error) {
-        console.error('Error in /start command:', error);
+        console.error('Error:', error);
         await bot.sendMessage(chatId, 'A apărut o eroare. Te rugăm să încerci din nou.');
     }
 });
 
-// Setare webhook
+// Set webhook for production
 if (process.env.VERCEL_URL) {
     const webhookUrl = `https://${process.env.VERCEL_URL}/webhook`;
-    bot.setWebHook(webhookUrl).then(() => {
-        console.log('Webhook set:', webhookUrl);
-    }).catch(console.error);
+    bot.setWebHook(webhookUrl);
 }
 
-// Export pentru Vercel
+// Error handling
+app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+});
+
 export default app;
