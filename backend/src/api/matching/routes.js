@@ -21,7 +21,7 @@ const calculateMatchScore = (currentUser, profile, preferences) => {
     let totalScore = 0;
     let totalWeight = 0;
 
-    // Funcție helper pentru calculul scorului
+    // Helper function for adding weighted scores
     const addScore = (score, weight) => {
         totalScore += score * weight;
         totalWeight += weight;
@@ -103,9 +103,22 @@ const calculateMatchScore = (currentUser, profile, preferences) => {
         addScore(1, 0.5);
     }
 
-    // Calculează scorul final (0-100)
     return totalWeight > 0 ? Math.round((totalScore / totalWeight) * 100) : 50;
 };
+
+// Helper function for sorting
+function getSortColumn(sortBy) {
+    switch (sortBy) {
+        case 'newest':
+            return 'created_at';
+        case 'lastActive':
+            return 'last_active';
+        case 'likes':
+            return 'likes_count';
+        default:
+            return 'created_at';
+    }
+}
 
 // Get potential matches
 router.get('/potential', async (req, res) => {
@@ -164,7 +177,7 @@ router.get('/potential', async (req, res) => {
             `)
             .not('id', 'in', excludeIds);
 
-        // Apply filters based on preferences
+        // Apply basic filters from preferences
         if (preferences.gender) {
             query = query.eq('gender', preferences.gender);
         }
@@ -315,8 +328,8 @@ router.put('/location', async (req, res) => {
     }
 });
 
-// Get detailed compatibility between users
-router.get('/compatibility/:profileId', async (req, res) => {
+// Advanced search
+router.post('/search', async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader) {
@@ -328,147 +341,137 @@ router.get('/compatibility/:profileId', async (req, res) => {
 
         if (authError) throw authError;
 
-        const { profileId } = req.params;
+        const {
+            ageRange,
+            distance,
+            gender,
+            interests,
+            languages,
+            heightRange,
+            educationLevel,
+            relationshipGoals,
+            lifestyle,
+            isOnline,
+            hasPhotos,
+            isPremium,
+            lastActive,
+            keyword,
+            sortBy = 'relevance',
+            page = 1,
+            limit = 20
+        } = req.body;
 
-        // Get both profiles
-        const { data: profiles, error: profilesError } = await supabase
+        // Get current user's location for distance calculation
+        const { data: currentUser } = await supabase
             .from('profiles')
             .select('*')
-            .in('id', [user.id, profileId]);
+            .eq('id', user.id)
+            .single();
 
-        if (profilesError) throw profilesError;
+        // Start building the query
+        let query = supabase
+            .from('profiles')
+            .select(`
+                *,
+                likes:likes(count)
+            `)
+            .neq('id', user.id);
 
-        const currentUser = profiles.find(p => p.id === user.id);
-        const otherProfile = profiles.find(p => p.id === profileId);
-
-        if (!currentUser || !otherProfile) {
-            return res.status(404).json({ error: 'Profile not found' });
+        // Apply all filters
+        if (gender) query = query.eq('gender', gender);
+        if (ageRange) {
+            const minDate = new Date();
+            minDate.setFullYear(minDate.getFullYear() - ageRange.max);
+            const maxDate = new Date();
+            maxDate.setFullYear(maxDate.getFullYear() - ageRange.min);
+            query = query
+                .gte('birth_date', minDate.toISOString())
+                .lte('birth_date', maxDate.toISOString());
+        }
+        if (heightRange) {
+            query = query
+                .gte('height', heightRange.min)
+                .lte('height', heightRange.max);
+        }
+        if (educationLevel) {
+            query = query.in('education_level', Array.isArray(educationLevel) ? educationLevel : [educationLevel]);
+        }
+        if (relationshipGoals) {
+            query = query.in('relationship_goals', Array.isArray(relationshipGoals) ? relationshipGoals : [relationshipGoals]);
+        }
+        if (languages) query = query.contains('languages', languages);
+        if (interests) query = query.contains('interests', interests);
+        if (hasPhotos) query = query.not('avatar_url', 'is', null);
+        if (isPremium) query = query.eq('is_premium', true);
+        if (lastActive) {
+            const timeAgo = new Date(Date.now() - lastActive * 60 * 60 * 1000).toISOString();
+            query = query.gte('last_active', timeAgo);
+        }
+        if (keyword) {
+            query = query.or(`username.ilike.%${keyword}%,bio.ilike.%${keyword}%`);
         }
 
-        // Calculate detailed compatibility
-        const compatibility = {
-            overall: calculateMatchScore(currentUser, otherProfile, currentUser.preferences),
-            details: {
-                interests: {
-                    score: 0,
-                    common: []
-                },
-                location: {
-                    score: 0,
-                    distance: 0
-                },
-                relationshipGoals: {
-                    score: 0,
-                    match: false
-                },
-                languages: {
-                    score: 0,
-                    common: []
-                },
-                lifestyle: {
-                    score: 0,
-                    matches: {}
-                }
-            }
-        };
+        // Get results with pagination
+        const { data: profiles, error, count } = await query
+            .order(getSortColumn(sortBy), { ascending: sortBy !== 'likes' })
+            .range((page - 1) * limit, page * limit - 1);
 
-        // Calculate interests compatibility
-        if (currentUser.interests?.length > 0 && otherProfile.interests?.length > 0) {
-            const commonInterests = otherProfile.interests.filter(
-                interest => currentUser.interests.includes(interest)
-            );
-            compatibility.details.interests = {
-                score: Math.round((commonInterests.length / currentUser.interests.length) * 100),
-                common: commonInterests
-            };
-        }
+        if (error) throw error;
 
-        // Calculate location compatibility
-        if (currentUser.latitude && otherProfile.latitude) {
-            const distance = calculateDistance(
-                currentUser.latitude,
-                currentUser.longitude,
-                otherProfile.latitude,
-                otherProfile.longitude
-            );
-            const maxDistance = currentUser.preferences.distance || 50;
-            compatibility.details.location = {
-                score: Math.round((1 - (distance / maxDistance)) * 100),
-                distance: Math.round(distance)
-            };
-        }
+        // Post-process results
+        let results = profiles;
 
-        // Calculate relationship goals compatibility
-        if (currentUser.preferences.relationshipGoals?.length > 0) {
-            const match = currentUser.preferences.relationshipGoals.includes(
-                otherProfile.relationship_goals
-            );
-            compatibility.details.relationshipGoals = {
-                score: match ? 100 : 0,
-                match
-            };
-        }
-
-        // Calculate languages compatibility
-        if (currentUser.preferences.languages?.length > 0 && otherProfile.languages?.length > 0) {
-            const commonLanguages = otherProfile.languages.filter(
-                lang => currentUser.preferences.languages.includes(lang)
-            );
-            compatibility.details.languages = {
-                score: Math.round((commonLanguages.length / currentUser.preferences.languages.length) * 100),
-                common: commonLanguages
-            };
-        }
-
-        // Calculate lifestyle compatibility
-        if (currentUser.preferences.lifestyle && otherProfile.lifestyle) {
-            const lifestyleMatches = {};
-            let matchCount = 0;
-            let totalFactors = 0;
-
-            Object.keys(currentUser.preferences.lifestyle).forEach(factor => {
-                if (currentUser.preferences.lifestyle[factor] && otherProfile.lifestyle[factor]) {
-                    totalFactors++;
-                    const matches = currentUser.preferences.lifestyle[factor] === otherProfile.lifestyle[factor];
-                    if (matches) matchCount++;
-                    lifestyleMatches[factor] = matches;
-                }
+        // Apply distance filter if specified
+        if (distance && currentUser.latitude && currentUser.longitude) {
+            results = profiles.filter(profile => {
+                if (!profile.latitude || !profile.longitude) return false;
+                const dist = calculateDistance(
+                    currentUser.latitude,
+                    currentUser.longitude,
+                    profile.latitude,
+                    profile.longitude
+                );
+                return dist <= distance;
             });
-
-            compatibility.details.lifestyle = {
-                score: totalFactors > 0 ? Math.round((matchCount / totalFactors) * 100
-) : 0,
-                matches: lifestyleMatches
-            };
         }
 
-        // Add educational compatibility
-        if (currentUser.preferences.educationLevel?.length > 0 && otherProfile.education_level) {
-            compatibility.details.education = {
-                score: currentUser.preferences.educationLevel.includes(otherProfile.education_level) ? 100 : 0,
-                level: otherProfile.education_level
-            };
+        // Add distance and match percentage to results
+        results = results.map(profile =>
+         => ({
+            ...profile,
+            distance: currentUser.latitude && profile.latitude ? 
+                Math.round(calculateDistance(
+                    currentUser.latitude,
+                    currentUser.longitude,
+                    profile.latitude,
+                    profile.longitude
+                )) : null,
+            matchPercentage: calculateMatchScore(currentUser, profile, currentUser.preferences)
+        }));
+
+        // Final sorting based on sortBy parameter
+        if (sortBy === 'distance' && currentUser.latitude) {
+            results.sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+        } else if (sortBy === 'matchPercentage') {
+            results.sort((a, b) => b.matchPercentage - a.matchPercentage);
         }
 
-        // Add height compatibility
-        if (currentUser.preferences.heightRange && otherProfile.height) {
-            const inRange = otherProfile.height >= currentUser.preferences.heightRange.min && 
-                          otherProfile.height <= currentUser.preferences.heightRange.max;
-            compatibility.details.height = {
-                score: inRange ? 100 : 0,
-                height: otherProfile.height,
-                preferred: currentUser.preferences.heightRange
-            };
-        }
-
-        res.json(compatibility);
+        res.json({
+            results,
+            pagination: {
+                page,
+                totalPages: Math.ceil(count / limit),
+                totalResults: count,
+                hasMore: page * limit < count
+            }
+        });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
 });
 
-// Get match statistics
-router.get('/statistics', async (req, res) => {
+// Save search filter
+router.post('/filters', async (req, res) => {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader) {
@@ -480,43 +483,138 @@ router.get('/statistics', async (req, res) => {
 
         if (authError) throw authError;
 
-        // Get total matches
-        const { count: matchesCount } = await supabase
-            .from('matches')
-            .select('*', { count: 'exact' })
-            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+        const { name, filter_data, is_default = false } = req.body;
 
-        // Get successful conversations (more than 5 messages)
-        const { data: conversations } = await supabase
-            .from('conversations')
-            .select(`
-                id,
-                messages:messages(count)
-            `)
-            .eq('status', 'active')
-            .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+        if (!name || !filter_data) {
+            return res.status(400).json({ error: 'Name and filter data are required' });
+        }
 
-        const activeConversations = conversations.filter(conv => conv.messages.count > 5).length;
+        // If this is set as default, remove default flag from other filters
+        if (is_default) {
+            await supabase
+                .from('saved_filters')
+                .update({ is_default: false })
+                .eq('user_id', user.id)
+                .eq('is_default', true);
+        }
 
-        // Get likes received
-        const { count: likesReceived } = await supabase
-            .from('likes')
-            .select('*', { count: 'exact' })
-            .eq('to_user', user.id);
+        // Save new filter
+        const { data: savedFilter, error: saveError } = await supabase
+            .from('saved_filters')
+            .insert([{
+                user_id: user.id,
+                name,
+                filter_data,
+                is_default
+            }])
+            .select()
+            .single();
 
-        // Get likes sent
-        const { count: likesSent } = await supabase
-            .from('likes')
-            .select('*', { count: 'exact' })
-            .eq('from_user', user.id);
+        if (saveError) throw saveError;
 
-        res.json({
-            matches: matchesCount || 0,
-            activeConversations: activeConversations || 0,
-            likesReceived: likesReceived || 0,
-            likesSent: likesSent || 0,
-            matchRate: likesSent ? Math.round((matchesCount / likesSent) * 100) : 0
-        });
+        res.status(201).json(savedFilter);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Get saved filters
+router.get('/filters', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError) throw authError;
+
+        const { data: filters, error } = await supabase
+            .from('saved_filters')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        res.json(filters);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Update saved filter
+router.put('/filters/:filterId', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError) throw authError;
+
+        const { filterId } = req.params;
+        const { name, filter_data, is_default } = req.body;
+
+        // If setting as default, remove default from others
+        if (is_default) {
+            await supabase
+                .from('saved_filters')
+                .update({ is_default: false })
+                .eq('user_id', user.id)
+                .eq('is_default', true);
+        }
+
+        const { data: updatedFilter, error } = await supabase
+            .from('saved_filters')
+            .update({
+                name,
+                filter_data,
+                is_default,
+                updated_at: new Date()
+            })
+            .eq('id', filterId)
+            .eq('user_id', user.id)  // Ensure user owns the filter
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json(updatedFilter);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Delete saved filter
+router.delete('/filters/:filterId', async (req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No authorization header' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+        if (authError) throw authError;
+
+        const { filterId } = req.params;
+
+        const { error } = await supabase
+            .from('saved_filters')
+            .delete()
+            .eq('id', filterId)
+            .eq('user_id', user.id);  // Ensure user owns the filter
+
+        if (error) throw error;
+
+        res.json({ success: true });
     } catch (error) {
         res.status(400).json({ error: error.message });
     }
