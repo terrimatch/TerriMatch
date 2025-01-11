@@ -10,7 +10,12 @@
     {
       "src": "/webhook",
       "dest": "/server/index.js",
-      "methods": ["POST", "GET"]
+      "methods": ["GET", "POST", "OPTIONS"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type"
+      }
     },
     {
       "src": "/health",
@@ -21,8 +26,5 @@
       "src": "/(.*)",
       "dest": "/server/index.js"
     }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  ]
 }
