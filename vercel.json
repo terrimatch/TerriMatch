@@ -2,18 +2,24 @@
   "version": 2,
   "builds": [
     {
-      "src": "/backend/src/api/index.js",
+      "src": "backend/src/api/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/backend/src/api/index.js"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/backend/src/api/index.js"
+      "dest": "/backend/src/api/index.js",
+      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+      "headers": {
+        "Access-Control-Allow-Origin": "*"
+      }
     }
-  ]
+  ],
+  "functions": {
+    "backend/src/api/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
 }
