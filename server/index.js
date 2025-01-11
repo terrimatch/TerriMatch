@@ -24,19 +24,53 @@ app.get('/', (req, res) => {
     });
 });
 
-// Inițializare bot doar dacă avem token
+// Inițializare bot
 if (process.env.TELEGRAM_BOT_TOKEN) {
     const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
-        polling: true // Folosim polling în loc de webhook pentru început
+        polling: true
     });
 
+    // Handler pentru comanda /start
     bot.on('message', async (msg) => {
         console.log('Received message:', msg);
         
         if (msg.text === '/start') {
-            await bot.sendMessage(msg.chat.id, 'Bine ai venit la TerriMatch! 🎉');
+            const welcomeMessage = `
+Bine ai venit la TerriMatch! 🎉
+
+Sunt aici să te ajut să găsești potrivirea perfectă pentru terenul tău. 
+
+Apasă butonul de mai jos pentru a începe:`;
+            
+            try {
+                await bot.sendMessage(msg.chat.id, welcomeMessage, {
+                    parse_mode: 'HTML',
+                    reply_markup: {
+                        inline_keyboard: [[
+                            {
+                                text: "🌍 Deschide TerriMatch",
+                                web_app: { url: process.env.TELEGRAM_WEBAPP_URL }
+                            }
+                        ]]
+                    }
+                });
+                console.log('Welcome message sent successfully');
+            } catch (error) {
+                console.error('Error sending welcome message:', error);
+                await bot.sendMessage(msg.chat.id, 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.');
+            }
         }
     });
+
+    // Logging pentru debugging
+    bot.on('polling_error', (error) => {
+        console.error('Polling error:', error);
+    });
+
+    bot.on('webhook_error', (error) => {
+        console.error('Webhook error:', error);
+    });
+
 } else {
     console.error('TELEGRAM_BOT_TOKEN nu este setat!');
 }
@@ -45,6 +79,8 @@ if (process.env.TELEGRAM_BOT_TOKEN) {
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
+    console.log('Environment:', process.env.NODE_ENV);
+    console.log('Webapp URL:', process.env.TELEGRAM_WEBAPP_URL);
 });
 
 module.exports = app;
