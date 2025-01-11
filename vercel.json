@@ -1,24 +1,19 @@
 {
   "version": 2,
-  "functions": {
-    "backend/src/api/index.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/backend/src/api/index.js"
-    }
-  ],
   "builds": [
     {
-      "src": "backend/src/api/index.js",
+      "src": "/backend/src/api/index.js",
       "use": "@vercel/node"
     }
   ],
-  "env": {
-    "NODE_ENV": "production"
-  }
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/backend/src/api/index.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/backend/src/api/index.js"
+    }
+  ]
 }
