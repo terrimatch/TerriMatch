@@ -1,11 +1,10 @@
 {
-  "name": "terrimatch-api",
+  "name": "terrimatch",
   "version": "1.0.0",
-  "type": "module",
+  "main": "server/index.js",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
     "node-telegram-bot-api": "^0.64.0"
   }
 }
