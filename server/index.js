@@ -5,10 +5,12 @@ const TelegramBot = require('node-telegram-bot-api');
 // Inițializare Express
 const app = express();
 
-// Logging inițial
-console.log('Server pornit cu următoarele configurări:');
+// Logging la pornire
+console.log('=== SERVER STARTING ===');
+console.log('Environment variables:');
 console.log('NODE_ENV:', process.env.NODE_ENV);
-console.log('WEBHOOK_URL:', `${process.env.TELEGRAM_WEBAPP_URL}/webhook`);
+console.log('TELEGRAM_WEBAPP_URL:', process.env.TELEGRAM_WEBAPP_URL);
+console.log('Bot token length:', process.env.TELEGRAM_BOT_TOKEN?.length || 'not set');
 
 // Configurare bot
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
@@ -18,97 +20,78 @@ const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
     }
 });
 
+// Verificare conectivitate bot
+bot.getMe()
+    .then(botInfo => {
+        console.log('Bot conectat cu succes:', botInfo);
+    })
+    .catch(error => {
+        console.error('Eroare la conectarea botului:', error);
+    });
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware pentru toate request-urile
-app.use((req, res, next) => {
-    console.log('Request primit:', {
-        method: req.method,
-        path: req.path,
-        body: req.body,
-        headers: req.headers
-    });
-    next();
-});
-
-// Rută principală
-app.get('/', (req, res) => {
+// Test route
+app.get('/test', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'TerriMatch API este activ'
+        timestamp: new Date().toISOString(),
+        botToken: process.env.TELEGRAM_BOT_TOKEN ? 'present' : 'missing',
+        webhookUrl: `${process.env.TELEGRAM_WEBAPP_URL}/webhook`
     });
 });
 
-// Rută pentru webhook
+// Webhook route
 app.post('/webhook', (req, res) => {
-    console.log('Webhook primit:', JSON.stringify(req.body, null, 2));
+    console.log('=== WEBHOOK CALLED ===');
+    console.log('Headers:', req.headers);
+    console.log('Body:', JSON.stringify(req.body, null, 2));
     
-    if (req.body && req.body.message) {
-        console.log('Mesaj primit:', req.body.message);
-        
-        // Procesare update
-        bot.processUpdate(req.body);
-        
-        // Verificare pentru comanda /start
-        if (req.body.message.text === '/start') {
-            console.log('Comandă /start detectată');
-            handleStart(req.body.message);
-        }
-    } else {
-        console.log('Update invalid primit la webhook');
+    if (!req.body) {
+        console.log('No body received');
+        return res.sendStatus(400);
     }
-    
+
+    bot.processUpdate(req.body);
     res.sendStatus(200);
 });
 
 // Handler pentru comanda /start
-async function handleStart(message) {
+bot.onText(/\/start/, async (msg) => {
+    console.log('=== START COMMAND RECEIVED ===');
+    console.log('From user:', msg.from);
+    
     try {
-        console.log('Procesare comandă /start pentru chat ID:', message.chat.id);
-        
-        const welcomeMessage = `
-Bine ai venit la TerriMatch! 🎉
-Sunt aici să te ajut să găsești potrivirea perfectă.
-        `;
-        
-        await bot.sendMessage(message.chat.id, welcomeMessage, {
-            parse_mode: 'HTML',
-            reply_markup: {
-                inline_keyboard: [[
-                    {
-                        text: "🚀 Deschide Aplicația",
-                        web_app: { url: process.env.TELEGRAM_WEBAPP_URL }
-                    }
-                ]]
-            }
-        });
-        
-        console.log('Mesaj de bun venit trimis cu succes');
+        const welcomeMessage = 'Bine ai venit la TerriMatch! 🎉';
+        await bot.sendMessage(msg.chat.id, welcomeMessage);
+        console.log('Welcome message sent successfully');
     } catch (error) {
-        console.error('Eroare la trimiterea mesajului de start:', error);
-        try {
-            await bot.sendMessage(message.chat.id, 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.');
-        } catch (sendError) {
-            console.error('Eroare la trimiterea mesajului de eroare:', sendError);
-        }
+        console.error('Error sending welcome message:', error);
     }
-}
+});
 
-// Setare webhook la pornirea serverului
+// Error handler
+app.use((err, req, res, next) => {
+    console.error('=== ERROR OCCURRED ===');
+    console.error('Error details:', err);
+    res.status(500).json({ error: 'Internal server error' });
+});
+
+// Setare webhook
 const webhookUrl = `${process.env.TELEGRAM_WEBAPP_URL}/webhook`;
 bot.setWebHook(webhookUrl).then(() => {
-    console.log('Webhook setat cu succes la:', webhookUrl);
+    console.log('Webhook set successfully to:', webhookUrl);
 }).catch(error => {
-    console.error('Eroare la setarea webhook-ului:', error);
+    console.error('Error setting webhook:', error);
 });
 
 // Pornire server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
-    console.log(`Server pornit pe portul ${port}`);
+    console.log(`Server running on port ${port}`);
 });
 
 module.exports = app;
