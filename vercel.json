@@ -1,35 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
   "builds": [
     {
       "src": "server/index.js",
       "use": "@vercel/node"
-    },
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
     }
   ],
   "routes": [
-    {
-      "src": "/api/webhook",
-      "dest": "server/index.js",
-      "methods": ["POST", "GET"]
-    },
-    {
-      "src": "/api/health",
-      "dest": "server/index.js",
-      "methods": ["GET"]
-    },
-    {
-      "src": "/api/(.*)",
-      "dest": "server/index.js"
-    },
     {
       "src": "/(.*)",
       "dest": "server/index.js"
@@ -38,9 +15,5 @@
   "env": {
     "NODE_ENV": "production"
   },
-  "regions": ["fra1"],
-  "github": {
-    "enabled": true,
-    "silent": true
-  }
+  "public": true
 }
