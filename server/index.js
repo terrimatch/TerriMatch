@@ -1,6 +1,18 @@
 const express = require('express');
 const cors = require('cors');
 const TelegramBot = require('node-telegram-bot-api');
+const matchesRoutes = require('./api/matches/routes');
+const telegramRoutes = require('./api/telegram/routes');
+const chatRoutes = require('./api/chat/routes'); // Adăugat nou
+
+// ... (cod existent) ...
+
+// Configurare rute API
+app.use('/api/matches', matchesRoutes);
+app.use('/api/telegram', telegramRoutes);
+app.use('/api/chat', chatRoutes); // Adăugat nou
+
+// ... (restul codului rămâne la fel) ...
 
 // Import routes
 const matchesRoutes = require('./api/matches/routes');
