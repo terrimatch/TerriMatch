@@ -1,138 +1,123 @@
 import React, { useState, useEffect } from 'react';
-import PropertyCard from './PropertyCard';
 import { supabase } from '../config/supabase';
-import { Search, Filter } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import CallNotification from './CallNotification';
+import CallHistory from './CallHistory';
+import VideoChat from './VideoChat';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Video, History } from 'lucide-react';
 
 const MainFeed = () => {
-    const [properties, setProperties] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filters, setFilters] = useState({
-        minPrice: '',
-        maxPrice: '',
-        propertyType: '',
-        location: ''
-    });
+    const [incomingCall, setIncomingCall] = useState(null);
+    const [activeCall, setActiveCall] = useState(null);
+    const [activeTab, setActiveTab] = useState('feed');
 
     useEffect(() => {
-        fetchProperties();
+        // Subscribă la notificări pentru apeluri video
+        const subscription = supabase
+            .channel('video_signals')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'video_signals',
+                filter: `to_user_id=eq.${supabase.auth.user().id}`
+            }, handleVideoSignal)
+            .subscribe();
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
-    const fetchProperties = async () => {
-        try {
-            let query = supabase
-                .from('properties')
-                .select('*')
-                .eq('is_active', true);
+    const handleVideoSignal = async (payload) => {
+        const { new: signal } = payload;
+        
+        if (signal.type === 'offer') {
+            // Obține informații despre apelant
+            const { data: caller } = await supabase
+                .from('profiles')
+                .select('first_name, last_name')
+                .eq('id', signal.from_user_id)
+                .single();
 
-            if (searchTerm) {
-                query = query.ilike('location', `%${searchTerm}%`);
-            }
-
-            if (filters.minPrice) {
-                query = query.gte('price', filters.minPrice);
-            }
-
-            if (filters.maxPrice) {
-                query = query.lte('price', filters.maxPrice);
-            }
-
-            if (filters.propertyType) {
-                query = query.eq('property_type', filters.propertyType);
-            }
-
-            const { data, error } = await query;
-
-            if (error) throw error;
-
-            setProperties(data);
-        } catch (error) {
-            console.error('Error fetching properties:', error);
-        } finally {
-            setLoading(false);
+            setIncomingCall({
+                id: signal.id,
+                caller: {
+                    id: signal.from_user_id,
+                    name: `${caller.first_name} ${caller.last_name}`
+                }
+            });
         }
     };
 
-    const handleLike = async (propertyId) => {
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            
-            const { error } = await supabase
-                .from('likes')
-                .insert({
-                    user_id: user.id,
-                    property_id: propertyId,
-                    created_at: new Date()
-                });
+    const handleAcceptCall = async () => {
+        if (!incomingCall) return;
 
-            if (error) throw error;
-
-            // Poți adăuga aici logica pentru actualizarea UI-ului
-        } catch (error) {
-            console.error('Error liking property:', error);
-        }
+        setActiveCall({
+            partnerId: incomingCall.caller.id,
+            partnerName: incomingCall.caller.name
+        });
+        setIncomingCall(null);
     };
 
-    const handleMessage = (propertyId) => {
-        // Implementează logica pentru deschiderea chat-ului
-        console.log('Open chat for property:', propertyId);
+    const handleDeclineCall = async () => {
+        if (!incomingCall) return;
+
+        // Trimite semnal de respingere
+        await supabase.from('video_signals').insert({
+            from_user_id: supabase.auth.user().id,
+            to_user_id: incomingCall.caller.id,
+            type: 'decline'
+        });
+
+        setIncomingCall(null);
+    };
+
+    const handleCallEnd = () => {
+        setActiveCall(null);
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-4">
-            {/* Search and Filters */}
-            <div className="mb-6 space-y-4">
-                <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                    <Input
-                        type="text"
-                        placeholder="Caută după locație..."
-                        className="pl-10"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                
-                <div className="flex gap-4">
-                    <Button
-                        variant="outline"
-                        className="flex items-center"
-                        onClick={() => {/* Implementează logica pentru filtre */}}
-                    >
-                        <Filter className="w-4 h-4 mr-2" />
-                        Filtre
-                    </Button>
-                    
-                    <select
-                        className="border rounded p-2"
-                        value={filters.propertyType}
-                        onChange={(e) => setFilters({...filters, propertyType: e.target.value})}
-                    >
-                        <option value="">Toate tipurile</option>
-                        <option value="teren_agricol">Teren Agricol</option>
-                        <option value="teren_constructii">Teren Construcții</option>
-                        <option value="teren_industrial">Teren Industrial</option>
-                    </select>
-                </div>
-            </div>
+        <div className="container mx-auto p-4">
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="mb-4">
+                    <TabsTrigger value="feed">
+                        <Video className="w-4 h-4 mr-2" />
+                        Apeluri Active
+                    </TabsTrigger>
+                    <TabsTrigger value="history">
+                        <History className="w-4 h-4 mr-2" />
+                        Istoric Apeluri
+                    </TabsTrigger>
+                </TabsList>
 
-            {/* Properties Grid */}
-            {loading ? (
-                <div>Se încarcă...</div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {properties.map((property) => (
-                        <PropertyCard
-                            key={property.id}
-                            property={property}
-                            onLike={handleLike}
-                            onMessage={handleMessage}
+                <TabsContent value="feed">
+                    {activeCall ? (
+                        <VideoChat
+                            partnerId={activeCall.partnerId}
+                            partnerName={activeCall.partnerName}
+                            onEnd={handleCallEnd}
                         />
-                    ))}
-                </div>
-            )}
+                    ) : (
+                        <div className="text-center py-8">
+                            <p className="text-gray-500">
+                                Nu există apeluri active în acest moment
+                            </p>
+                        </div>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="history">
+                    <CallHistory />
+                </TabsContent>
+            </Tabs>
+
+            <CallNotification
+                isOpen={!!incomingCall}
+                caller={incomingCall?.caller}
+                onAccept={handleAcceptCall}
+                onDecline={handleDeclineCall}
+            />
         </div>
     );
 };
