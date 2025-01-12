@@ -1,0 +1,72 @@
+/* Efecte de fundal animate */
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.bg-animate {
+  animation: gradient 15s ease infinite;
+  background-size: 400% 400%;
+}
+
+/* Efecte pentru carduri */
+.card-hover {
+  transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Efecte de iluminare */
+.neon-glow {
+  box-shadow: 0 0 15px theme('colors.pink.500'),
+              0 0 30px theme('colors.purple.500');
+}
+
+/* Animație pentru logo */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Efecte de glassmorphism */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Efecte pentru butoane */
+.button-gradient {
+  background-size: 200% auto;
+  transition: 0.5s;
+}
+
+.button-gradient:hover {
+  background-position: right center;
+}
+
+/* Animație pentru statistici */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stat-animation {
+  animation: countUp 0.5s ease-out forwards;
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
