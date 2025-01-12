@@ -1,39 +1,65 @@
-import React, { useEffect, useState } from 'react';
-import RegistrationForm from './components/RegistrationForm';
-import MainFeed from './components/MainFeed';
-import useAuth from './hooks/useAuth';
+import React from 'react';
+import './styles/global.css';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TerriCoinStats from './components/TerriCoinStats';
+import CallHistory from './components/CallHistory';
+import NotificationCenter from './components/NotificationCenter';
 
-function App() {
-    const { user, loading } = useAuth();
-    const [isInitialized, setIsInitialized] = useState(false);
+const App = () => {
+  return (
+    <div className="min-h-screen">
+      {/* Header cu efect de sticlă */}
+      <header className="glass-container fixed top-0 w-full z-50 p-4">
+        <div className="container mx-auto flex justify-between items-center">
+          <div className="flex items-center space-x-2">
+            <img src="/logo192.png" alt="TerriMatch" className="w-10 h-10" />
+            <h1 className="text-xl font-bold">TerriMatch</h1>
+          </div>
+          <NotificationCenter />
+        </div>
+      </header>
 
-    useEffect(() => {
-        // Inițializare Telegram WebApp
-        const tg = window.Telegram.WebApp;
-        if (tg) {
-            tg.ready();
-            setIsInitialized(true);
-        }
-    }, []);
+      {/* Container principal */}
+      <main className="container mx-auto pt-20 p-4">
+        <div className="glass-container p-6">
+          <Tabs defaultValue="matches" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="matches" className="hover-scale">
+                Matches
+              </TabsTrigger>
+              <TabsTrigger value="calls" className="hover-scale">
+                Calls
+              </TabsTrigger>
+              <TabsTrigger value="wallet" className="hover-scale">
+                TerriCoin
+              </TabsTrigger>
+            </TabsList>
 
-    if (loading || !isInitialized) {
-        return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Se încarcă...</p>
-                </div>
-            </div>
-        );
-    }
+            <TabsContent value="matches" className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Cards pentru matches vor fi aici */}
+              </div>
+            </TabsContent>
 
-    // Dacă utilizatorul nu este înregistrat, arată formularul de înregistrare
-    if (!user?.registration_completed) {
-        return <RegistrationForm />;
-    }
+            <TabsContent value="calls">
+              <CallHistory />
+            </TabsContent>
 
-    // Dacă utilizatorul este înregistrat, arată feed-ul principal
-    return <MainFeed />;
-}
+            <TabsContent value="wallet">
+              <TerriCoinStats />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </main>
+
+      {/* Footer cu efect de sticlă */}
+      <footer className="glass-container mt-8 p-4">
+        <div className="container mx-auto text-center text-sm text-gray-400">
+          TerriMatch © 2024
+        </div>
+      </footer>
+    </div>
+  );
+};
 
 export default App;
