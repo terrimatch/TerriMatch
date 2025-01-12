@@ -1,11 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import './index.css';
-import TelegramWebApp from './TelegramWebApp';
+import App from './App';
 
 ReactDOM.render(
   <React.StrictMode>
-    <TelegramWebApp />
+    <App />
   </React.StrictMode>,
   document.getElementById('root')
 );
