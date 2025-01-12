@@ -1,71 +1,97 @@
-// src/services/notificationService.js
-let ws = null;
+import { supabase } from '../config/supabase';
 
-export const initializeNotifications = (userId, onNotificationReceived) => {
-  ws = new WebSocket('ws://localhost:3001/notifications');
+class NotificationService {
+    async requestPermission() {
+        if (!('Notification' in window)) {
+            console.log('This browser does not support notifications');
+            return false;
+        }
 
-  ws.onopen = () => {
-    console.log('Connected to notification server');
-    ws.send(JSON.stringify({
-      type: 'auth',
-      userId: userId
-    }));
-  };
+        try {
+            const permission = await Notification.requestPermission();
+            return permission === 'granted';
+        } catch (error) {
+            console.error('Error requesting notification permission:', error);
+            return false;
+        }
+    }
 
-  ws.onmessage = (event) => {
-    const notification = JSON.parse(event.data);
-    onNotificationReceived(notification);
-  };
+    async registerPushSubscription(userId) {
+        try {
+            if (!('serviceWorker' in navigator)) return;
 
-  ws.onerror = (error) => {
-    console.error('Notification WebSocket error:', error);
-  };
+            const registration = await navigator.serviceWorker.register('/service-worker.js');
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: process.env.REACT_APP_VAPID_PUBLIC_KEY
+            });
 
-  ws.onclose = () => {
-    console.log('Disconnected from notification server');
-    // Reconectare automată
-    setTimeout(() => initializeNotifications(userId, onNotificationReceived), 3000);
-  };
+            const { error } = await supabase
+                .from('push_subscriptions')
+                .upsert({
+                    user_id: userId,
+                    subscription: JSON.stringify(subscription),
+                    created_at: new Date()
+                });
 
-  return ws;
-};
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error registering push subscription:', error);
+            return false;
+        }
+    }
 
-export const getNotificationSettings = async (userId) => {
-  try {
-    const response = await fetch(`http://localhost:3001/api/notifications/settings/${userId}`);
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching notification settings:', error);
-    return { success: false, error: error.message };
-  }
-};
+    async updateNotificationSettings(settings) {
+        try {
+            const { error } = await supabase
+                .from('notification_settings')
+                .upsert({
+                    user_id: supabase.auth.user().id,
+                    ...settings,
+                    updated_at: new Date()
+                });
 
-export const updateNotificationSettings = async (userId, settings) => {
-  try {
-    const response = await fetch('http://localhost:3001/api/notifications/settings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
-        settings
-      })
-    });
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error updating notification settings:', error);
+            return false;
+        }
+    }
 
-    return await response.json();
-  } catch (error) {
-    console.error('Error updating notification settings:', error);
-    return { success: false, error: error.message };
-  }
-};
+    async sendLocalNotification(title, options = {}) {
+        if (!('Notification' in window)) return;
 
-export const getNotificationHistory = async (userId) => {
-  try {
-    const response = await fetch(`http://localhost:3001/api/notifications/history/${userId}`);
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching notification history:', error);
-    return { success: false, error: error.message };
-  }
-};
+        try {
+            if (Notification.permission === 'granted') {
+                return new Notification(title, {
+                    icon: '/app-icon.png',
+                    ...options
+                });
+            }
+        } catch (error) {
+            console.error('Error sending local notification:', error);
+        }
+    }
+
+    async markAsRead(notificationId) {
+        try {
+            const { error } = await supabase
+                .from('notifications')
+                .update({
+                    read: true,
+                    read_at: new Date()
+                })
+                .eq('id', notificationId);
+
+            if (error) throw error;
+            return true;
+        } catch (error) {
+            console.error('Error marking notification as read:', error);
+            return false;
+        }
+    }
+}
+
+export default new NotificationService();
