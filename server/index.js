@@ -1,41 +1,59 @@
 const express = require('express');
 const cors = require('cors');
 const TelegramBot = require('node-telegram-bot-api');
+const path = require('path');
 
+// Inițializare Express
 const app = express();
 
-// Logging pentru debugging
-console.log('Starting server...');
-console.log('Environment:', process.env.NODE_ENV);
-console.log('Bot token length:', process.env.TELEGRAM_BOT_TOKEN?.length || 'not set');
-console.log('Webapp URL:', process.env.TELEGRAM_WEBAPP_URL);
+// Verificare variabile de mediu
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.error('TELEGRAM_BOT_TOKEN missing');
+    process.exit(1);
+}
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../frontend/build')));
 
-// Inițializare bot
+// Inițializare bot cu polling forțat și timeout mare
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
-    polling: true
+    polling: {
+        interval: 300,
+        autoStart: true,
+        params: {
+            timeout: 10
+        }
+    }
 });
 
-// Logging pentru erori bot
+// Logging pentru debugging
+console.log('Bot initialized with token length:', process.env.TELEGRAM_BOT_TOKEN.length);
+
+// Handler pentru erori de polling
 bot.on('polling_error', (error) => {
-    console.error('Bot polling error:', error);
+    console.error('Polling error:', error);
+    // Repornește polling-ul în caz de eroare
+    bot.startPolling();
 });
 
-bot.on('error', (error) => {
-    console.error('Bot general error:', error);
+// Handler pentru orice mesaj (pentru debugging)
+bot.on('message', (msg) => {
+    console.log('Received message:', msg.text, 'from:', msg.from.id);
 });
 
-// Handler pentru comanda /start
+// Handler specific pentru comanda /start
 bot.onText(/\/start/, async (msg) => {
-    console.log('Received /start command from:', msg.chat.id);
+    console.log('Received /start command from:', msg.from.id);
     try {
         const welcomeMessage = `
-Bine ai venit la TerriMatch! 🎉
+🎉 Bine ai venit la TerriMatch!
 
-Găsește sufletul pereche perfect pentru tine.
+Găsește-ți sufletul pereche perfect pentru tine.
+💝 20 mesaje gratuite pentru început
+🎥 Video chat disponibil pentru 1 TerriCoin/minut
+
 Apasă butonul de mai jos pentru a începe:
         `;
         
@@ -44,7 +62,7 @@ Apasă butonul de mai jos pentru a începe:
             reply_markup: {
                 inline_keyboard: [[
                     {
-                        text: "💝 Deschide TerriMatch",
+                        text: "💘 Deschide TerriMatch",
                         web_app: { url: process.env.TELEGRAM_WEBAPP_URL }
                     }
                 ]]
@@ -52,43 +70,43 @@ Apasă butonul de mai jos pentru a începe:
         });
         console.log('Welcome message sent successfully');
     } catch (error) {
-        console.error('Error in /start command:', error);
+        console.error('Error sending welcome message:', error);
         try {
             await bot.sendMessage(msg.chat.id, 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.');
-        } catch (sendError) {
-            console.error('Error sending error message:', sendError);
+        } catch (retryError) {
+            console.error('Error sending error message:', retryError);
         }
     }
 });
 
-// Handler pentru orice mesaj
-bot.on('message', (msg) => {
-    console.log('Received message:', msg);
-});
-
-// Rută pentru verificare server
-app.get('/', (req, res) => {
+// Rută pentru health check
+app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
-        botInitialized: !!bot,
+        botActive: bot.isPolling(),
         timestamp: new Date().toISOString()
     });
 });
 
-// Pornire server
-const port = process.env.PORT || 3000;
-const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+// Handler pentru închidere grațioasă
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received');
+    bot.stopPolling();
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Shutting down...');
-    bot.stopPolling();
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
+// Pornire server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+    console.log('Bot polling:', bot.isPolling());
+    
+    // Verifică starea bot-ului la fiecare 5 minute
+    setInterval(() => {
+        if (!bot.isPolling()) {
+            console.log('Bot not polling, restarting...');
+            bot.startPolling();
+        }
+    }, 300000);
 });
 
 module.exports = app;
