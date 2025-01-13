@@ -6,94 +6,26 @@
     <title>TerriMatch</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        :root {
+            --primary-color: #1a4fff;
+            --secondary-color: #0037db;
+            --gradient-start: #1e3a8a;
+            --gradient-end: #1e40af;
+        }
+        
         body {
             margin: 0;
             padding: 0;
             min-height: 100vh;
-            background: linear-gradient(135deg, #ff6b6b 0%, #556270 100%);
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
             font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu;
             color: white;
         }
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .step {
-            display: none;
-        }
-        .step.active {
-            display: block;
-        }
-        .logo {
-            width: 100px;
-            height: 100px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 50%;
-            margin: 20px auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 40px;
-        }
-        .card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 20px;
-            margin: 20px 0;
-            text-align: center;
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .stat-card {
-            background: rgba(255,255,255,0.1);
-            padding: 15px;
-            border-radius: 15px;
-            text-align: center;
-        }
-        .input-group {
-            margin-bottom: 20px;
-            text-align: left;
-        }
-        .input-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: white;
-        }
-        .input-group input, .input-group textarea, .input-group select {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid rgba(255,255,255,0.2);
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            color: white;
-            font-size: 16px;
-        }
-        .input-group input::placeholder {
-            color: rgba(255,255,255,0.5);
-        }
-        .photo-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin: 20px 0;
-        }
-        .photo-upload {
-            aspect-ratio: 1;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-        }
+
+        /* ... restul stilurilor rămân la fel ... */
+        
         .button {
-            background: rgba(255,255,255,0.2);
+            background: var(--primary-color);
             border: none;
             padding: 15px 30px;
             border-radius: 25px;
@@ -104,154 +36,61 @@
             margin-top: 20px;
             transition: all 0.3s ease;
         }
+
         .button:hover {
-            background: rgba(255,255,255,0.3);
+            background: var(--secondary-color);
         }
-        .step-indicator {
-            display: flex;
-            justify-content: center;
-            margin: 20px 0;
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
-        .step-dot {
-            width: 10px;
-            height: 10px;
-            background: rgba(255,255,255,0.3);
-            border-radius: 50%;
-            margin: 0 5px;
-        }
+
         .step-dot.active {
-            background: white;
+            background: var(--primary-color);
         }
+
+        /* ... restul codului HTML rămâne la fel ... */
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 </head>
 <body>
-    <div class="container">
-        <!-- Step 1: Welcome -->
-        <div class="step active" id="step1">
-            <div class="logo">❤️</div>
-            <h1 style="text-align: center;">TerriMatch</h1>
-            <p style="text-align: center;">Găsește sufletul pereche perfect pentru tine</p>
-
-            <div class="stats">
-                <div class="stat-card">
-                    <h3>Chat</h3>
-                    <p>20 mesaje gratuite</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Video Chat</h3>
-                    <p>1 TerriCoin/min</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Matches</h3>
-                    <p>Nelimitat</p>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2>Începe Aventura</h2>
-                <p>Completează profilul tău și găsește persoane compatibile</p>
-                <button class="button" onclick="nextStep(1)">Continuă</button>
-            </div>
-        </div>
-
-        <!-- Step 2: Basic Info -->
-        <div class="step" id="step2">
-            <div class="step-indicator">
-                <div class="step-dot active"></div>
-                <div class="step-dot"></div>
-                <div class="step-dot"></div>
-            </div>
-            <div class="card">
-                <h2>Informații de Bază</h2>
-                <div class="input-group">
-                    <label for="name">Nume Complet</label>
-                    <input type="text" id="name" placeholder="Numele tău">
-                </div>
-                <div class="input-group">
-                    <label for="birthdate">Data Nașterii</label>
-                    <input type="date" id="birthdate">
-                </div>
-                <div class="input-group">
-                    <label for="gender">Gen</label>
-                    <select id="gender">
-                        <option value="">Selectează</option>
-                        <option value="male">Bărbat</option>
-                        <option value="female">Femeie</option>
-                    </select>
-                </div>
-                <button class="button" onclick="nextStep(2)">Continuă</button>
-            </div>
-        </div>
-
-        <!-- Step 3: Photos -->
-        <div class="step" id="step3">
-            <div class="step-indicator">
-                <div class="step-dot"></div>
-                <div class="step-dot active"></div>
-                <div class="step-dot"></div>
-            </div>
-            <div class="card">
-                <h2>Adaugă Poze</h2>
-                <p>Adaugă cel puțin 2 poze</p>
-                <div class="photo-grid">
-                    <div class="photo-upload" onclick="uploadPhoto(1)">+</div>
-                    <div class="photo-upload" onclick="uploadPhoto(2)">+</div>
-                    <div class="photo-upload" onclick="uploadPhoto(3)">+</div>
-                    <div class="photo-upload" onclick="uploadPhoto(4)">+</div>
-                    <div class="photo-upload" onclick="uploadPhoto(5)">+</div>
-                    <div class="photo-upload" onclick="uploadPhoto(6)">+</div>
-                </div>
-                <button class="button" onclick="nextStep(3)">Continuă</button>
-            </div>
-        </div>
-
-        <!-- Step 4: Bio -->
-        <div class="step" id="step4">
-            <div class="step-indicator">
-                <div class="step-dot"></div>
-                <div class="step-dot"></div>
-                <div class="step-dot active"></div>
-            </div>
-            <div class="card">
-                <h2>Despre Tine</h2>
-                <div class="input-group">
-                    <label for="bio">Descriere</label>
-                    <textarea id="bio" rows="4" placeholder="Spune câteva cuvinte despre tine..."></textarea>
-                </div>
-                <div class="input-group">
-                    <label for="location">Locație</label>
-                    <input type="text" id="location" placeholder="Orașul tău">
-                </div>
-                <button class="button" onclick="completeRegistration()">Finalizează</button>
-            </div>
-        </div>
-    </div>
-
+    <!-- ... HTML-ul rămâne la fel ... -->
+    
     <script>
-        let currentStep = 1;
-        const tg = window.Telegram.WebApp;
+        // Inițializare Supabase
+        const supabaseUrl = 'SUPABASE_URL';
+        const supabaseKey = 'SUPABASE_ANON_KEY';
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-        // Initialize Telegram WebApp
-        if (tg) {
-            tg.ready();
-            tg.expand();
+        // Colectare și salvare date
+        async function saveUserData(formData) {
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .upsert([
+                        {
+                            telegram_id: tg.initDataUnsafe?.user?.id,
+                            name: formData.name,
+                            birthdate: formData.birthdate,
+                            gender: formData.gender,
+                            bio: formData.bio,
+                            location: formData.location,
+                            last_active: new Date(),
+                            registration_completed: true
+                        }
+                    ]);
+
+                if (error) throw error;
+                return true;
+            } catch (error) {
+                console.error('Error saving data:', error);
+                return false;
+            }
         }
 
-        function nextStep(step) {
-            // Hide current step
-            document.getElementById(`step${currentStep}`).classList.remove('active');
-            // Show next step
-            currentStep = step + 1;
-            document.getElementById(`step${currentStep}`).classList.add('active');
-        }
-
-        function uploadPhoto(index) {
-            // Here you would implement photo upload functionality
-            console.log(`Uploading photo ${index}`);
-        }
-
-        function completeRegistration() {
-            // Collect all form data
+        async function completeRegistration() {
             const formData = {
                 name: document.getElementById('name').value,
                 birthdate: document.getElementById('birthdate').value,
@@ -260,18 +99,22 @@
                 location: document.getElementById('location').value
             };
 
-            // Send data to server
-            console.log('Registration data:', formData);
-
-            // Close WebApp
-            if (tg) {
-                tg.close();
+            // Validare date
+            if (!formData.name || !formData.birthdate || !formData.gender || !formData.bio || !formData.location) {
+                alert('Te rugăm să completezi toate câmpurile obligatorii.');
+                return;
             }
-        }
 
-        // Listen for main button clicks
-        if (tg) {
-            tg.MainButton.onClick(completeRegistration);
+            // Salvare în Supabase
+            const success = await saveUserData(formData);
+            
+            if (success) {
+                if (tg) {
+                    tg.close();
+                }
+            } else {
+                alert('A apărut o eroare la salvarea datelor. Te rugăm să încerci din nou.');
+            }
         }
     </script>
 </body>
