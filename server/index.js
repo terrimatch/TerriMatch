@@ -1,39 +1,25 @@
-const express = require('express');
-const cors = require('cors');
-const TelegramBot = require('node-telegram-bot-api');
+import express from 'express';
+import cors from 'cors';
+import TelegramBot from 'node-telegram-bot-api';
 
-// Inițializare Express
 const app = express();
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Verificare token
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-    console.error('TELEGRAM_BOT_TOKEN is missing!');
-    process.exit(1);
-}
+// Logging pentru debugging
+console.log('Starting TerriMatch server...');
+console.log('Bot token exists:', !!process.env.TELEGRAM_BOT_TOKEN);
+console.log('WebApp URL:', process.env.TELEGRAM_WEBAPP_URL);
 
-// Inițializare bot cu polling
-let bot;
-try {
-    bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
-        polling: true
-    });
-    console.log('Bot initialized successfully');
-} catch (error) {
-    console.error('Failed to initialize bot:', error);
-    process.exit(1);
-}
-
-// Handler pentru mesaje - pentru debugging
-bot.on('message', (msg) => {
-    console.log('Received message:', msg.text, 'from:', msg.chat.id);
+// Inițializare bot
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, {
+    polling: true
 });
 
-// Handler specific pentru /start
+// Handler pentru /start
 bot.onText(/\/start/, async (msg) => {
-    console.log('Received /start command from:', msg.chat.id);
-    
     try {
         const welcomeMessage = `
 🌟 Bine ai venit la TerriMatch!
@@ -48,53 +34,46 @@ Apasă butonul de mai jos pentru a începe:`;
         await bot.sendMessage(msg.chat.id, welcomeMessage, {
             parse_mode: 'HTML',
             reply_markup: {
-                inline_keyboard: [[
-                    {
-                        text: "❤️ Deschide TerriMatch",
-                        web_app: { url: process.env.TELEGRAM_WEBAPP_URL }
-                    }
-                ]]
+                inline_keyboard: [[{
+                    text: "❤️ Deschide TerriMatch",
+                    web_app: { url: process.env.TELEGRAM_WEBAPP_URL }
+                }]]
             }
         });
-        console.log('Welcome message sent successfully');
+        console.log('Welcome message sent to:', msg.chat.id);
     } catch (error) {
         console.error('Error sending welcome message:', error);
-        try {
-            await bot.sendMessage(msg.chat.id, 'Ne pare rău, a apărut o eroare. Te rugăm să încerci din nou.');
-        } catch (retryError) {
-            console.error('Error sending error message:', retryError);
-        }
     }
 });
 
-// Rută pentru verificarea stării
-app.get('/', (req, res) => {
-    res.json({
-        status: 'active',
-        botActive: bot?.isPolling(),
-        timestamp: new Date().toISOString()
-    });
+// Handler pentru toate mesajele (debugging)
+bot.on('message', (msg) => {
+    console.log('Received message:', msg.text);
 });
 
-// Gestionare erori bot
+// Error handler pentru bot
 bot.on('polling_error', (error) => {
     console.error('Polling error:', error);
 });
 
-bot.on('error', (error) => {
-    console.error('Bot error:', error);
+// Rută pentru health check
+app.get('/', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'TerriMatch bot is running',
+        botActive: bot.isPolling()
+    });
 });
 
 // Pornire server
 const port = process.env.PORT || 3000;
 const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-    console.log('Bot polling:', bot?.isPolling());
+    console.log(`Server is running on port ${port}`);
 });
 
 // Gestionare închidere grațioasă
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Shutting down gracefully...');
+    console.log('SIGTERM received. Shutting down...');
     bot.stopPolling();
     server.close(() => {
         console.log('Server closed');
@@ -102,4 +81,4 @@ process.on('SIGTERM', () => {
     });
 });
 
-module.exports = app;
+export default app;
