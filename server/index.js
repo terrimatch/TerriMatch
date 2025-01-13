@@ -1,16 +1,26 @@
 const express = require('express');
+const path = require('path');
 const TelegramBot = require('node-telegram-bot-api');
 
 const app = express();
+
+// Serve static files
+app.use(express.static('public'));
 app.use(express.json());
 
-// Debug logs
-console.log('Starting server...');
-console.log('Bot token exists:', !!process.env.TELEGRAM_BOT_TOKEN);
+// API health check
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        botInitialized: true,
+        polling: bot.isPolling(),
+        timestamp: new Date().toISOString()
+    });
+});
 
-// Basic route
+// Serve web app
 app.get('/', (req, res) => {
-    res.json({ status: 'ok' });
+    res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
 // Initialize bot
@@ -46,5 +56,4 @@ bot.on('polling_error', (error) => {
     console.error('Polling error:', error);
 });
 
-// Export for Vercel
 module.exports = app;
