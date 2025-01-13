@@ -1,33 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="utf-8" />
-    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <meta name="description" content="TerriMatch - Dating App" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>TerriMatch</title>
-
-    <!-- Script pentru Telegram WebApp -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #ff6b6b 0%, #556270 100%);
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu;
+            color: white;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+        .card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 15px;
+        }
+        .button {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+        .button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
 </head>
 <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
+    <div class="container">
+        <div class="logo">❤️</div>
+        <h1>TerriMatch</h1>
+        <p>Găsește sufletul pereche perfect pentru tine</p>
 
-    <!-- Service Worker Registration -->
+        <div class="stats">
+            <div class="stat-card">
+                <h3>Chat</h3>
+                <p>20 mesaje gratuite</p>
+            </div>
+            <div class="stat-card">
+                <h3>Video Chat</h3>
+                <p>1 TerriCoin/min</p>
+            </div>
+            <div class="stat-card">
+                <h3>Matches</h3>
+                <p>Nelimitat</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Începe Aventura</h2>
+            <p>Completează profilul tău și găsește persoane compatibile</p>
+            <button class="button" onclick="startApp()">Continuă</button>
+        </div>
+    </div>
+
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', async () => {
-                try {
-                    const registration = await navigator.serviceWorker.register('/service-worker.js');
-                    console.log('ServiceWorker registered: ', registration);
-                } catch (error) {
-                    console.log('ServiceWorker registration failed: ', error);
-                }
-            });
+        function startApp() {
+            const tg = window.Telegram.WebApp;
+            if (tg) {
+                tg.ready();
+                tg.expand();
+                tg.MainButton.setText('Începe');
+                tg.MainButton.show();
+            }
+        }
+
+        // Initialize Telegram WebApp
+        const tg = window.Telegram.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
         }
     </script>
 </body>
