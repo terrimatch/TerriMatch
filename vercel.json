@@ -3,13 +3,14 @@
   "builds": [
     {
       "src": "server/index.js",
-      "use": "@vercel/node@18.18.0"
+      "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/server/index.js"
+      "dest": "server/index.js",
+      "methods": ["GET", "POST", "OPTIONS"]
     }
   ]
 }
