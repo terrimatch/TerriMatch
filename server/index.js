@@ -17,17 +17,16 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY
 );
 
-// Inițializare bot
-const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { 
-    polling: true 
+// Inițializare bot fără polling
+const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN);
+
+// Rută pentru webhook Telegram
+app.post('/webhook', (req, res) => {
+    bot.processUpdate(req.body);
+    res.sendStatus(200);
 });
 
-// Logging pentru debugging
-console.log('Server starting...');
-console.log('Bot token exists:', !!process.env.TELEGRAM_BOT_TOKEN);
-console.log('Supabase URL exists:', !!process.env.SUPABASE_URL);
-
-// Handler pentru /start
+// Handler pentru comanda /start
 bot.onText(/\/start/, async (msg) => {
     try {
         await bot.sendMessage(msg.chat.id, 
@@ -43,7 +42,7 @@ bot.onText(/\/start/, async (msg) => {
             }
         });
     } catch (error) {
-        console.error('Error in /start command:', error);
+        console.error('Error sending message:', error);
     }
 });
 
@@ -51,8 +50,7 @@ bot.onText(/\/start/, async (msg) => {
 app.post('/api/register', async (req, res) => {
     try {
         const userData = req.body;
-        console.log('Registering user:', userData);
-
+        
         const { data, error } = await supabase
             .from('profiles')
             .upsert([{
@@ -74,18 +72,15 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// Rută pentru health check
+// Rută de bază
 app.get('/', (req, res) => {
-    res.json({
-        status: 'ok',
-        botActive: bot?.isPolling(),
-        timestamp: new Date().toISOString()
-    });
+    res.json({ status: 'ok' });
 });
 
-// Error handling pentru bot
-bot.on('polling_error', (error) => {
-    console.error('Bot polling error:', error);
+// Handle errors
+app.use((err, req, res, next) => {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
 });
 
 // Export pentru Vercel
